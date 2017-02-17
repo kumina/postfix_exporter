@@ -146,7 +146,7 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 
 func main() {
 	var (
-		listenAddress    = flag.String("web.listen-address", ":6054", "Address to listen on for web interface and telemetry.")
+		listenAddress    = flag.String("web.listen-address", ":9154", "Address to listen on for web interface and telemetry.")
 		metricsPath      = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 		postfixShowqPath = flag.String("postfix.showq_path", "/var/spool/postfix/public/showq", "Path at which Postfix places its showq socket.")
 	)
