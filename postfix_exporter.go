@@ -30,7 +30,7 @@ import (
 
 var (
 	postfixUpDesc = prometheus.NewDesc(
-		prometheus.BuildFQName("unbound", "", "up"),
+		prometheus.BuildFQName("postfix", "", "up"),
 		"Whether scraping Postfix's metrics was successful.",
 		nil, nil)
 )
@@ -52,14 +52,14 @@ func CollectShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
 	// Histograms tracking the messages by size and age.
 	sizeHistogram := prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Namespace: "unbound",
+			Namespace: "postfix",
 			Name:      "queue_message_size_bytes",
 			Help:      "Size of messages in Postfix's message queue, in bytes",
 			Buckets:   []float64{1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9},
 		})
 	ageHistogram := prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Namespace: "unbound",
+			Namespace: "postfix",
 			Name:      "queue_message_age_seconds",
 			Help:      "Age of messages in Postfix's message queue, in seconds",
 			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
