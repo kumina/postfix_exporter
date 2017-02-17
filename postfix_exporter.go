@@ -85,7 +85,7 @@ func CollectShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
 			}
 			date = date.AddDate(now.Year(), 0, 0)
 			if date.After(now) {
-				date.AddDate(-1, 0, 0)
+				date = date.AddDate(-1, 0, 0)
 			}
 
 			sizeHistogram.Observe(size)
