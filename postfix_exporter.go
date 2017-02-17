@@ -35,6 +35,12 @@ var (
 		nil, nil)
 )
 
+// Parses the output of Postfix's 'showq' command and turns it into metrics.
+//
+// Recent versions of Postfix actually make this easy, because they have
+// a new 'showq_json' command. Unfortunately, we cannot assume that
+// versions of Postfix that are in use support this, so just parse the
+// textual format.
 func CollectShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
