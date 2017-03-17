@@ -15,7 +15,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -37,11 +40,23 @@ var (
 
 // Parses the output of Postfix's 'showq' command and turns it into metrics.
 //
-// Recent versions of Postfix actually make this easy, because they have
-// a new 'showq_json' command. Unfortunately, we cannot assume that
-// versions of Postfix that are in use support this, so just parse the
-// textual format.
+// The output format of this command depends on the version of Postfix
+// used. Postfix 2.x uses a textual format, identical to the output of
+// the 'mailq' command. Postfix 3.x uses a binary format, where entries
+// are terminated using null bytes. Auto-detect the format by scanning
+// for null bytes in the first 128 bytes of output.
 func CollectShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
+	reader := bufio.NewReader(file)
+	buf, _ := reader.Peek(128)
+	if bytes.IndexByte(buf, 0) >= 0 {
+		return CollectBinaryShowqFromReader(reader, ch)
+	} else {
+		return CollectTextualShowqFromReader(reader, ch)
+	}
+}
+
+// Parses Postfix's textual showq output.
+func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
 
@@ -90,6 +105,76 @@ func CollectShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
 
 			sizeHistogram.Observe(size)
 			ageHistogram.Observe(now.Sub(date).Seconds())
+		}
+	}
+
+	ch <- sizeHistogram
+	ch <- ageHistogram
+	return scanner.Err()
+}
+
+// Splitting function for bufio.Scanner to split entries by null bytes.
+func ScanNullTerminatedEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if i := bytes.IndexByte(data, 0); i >= 0 {
+		// Valid record found.
+		return i + 1, data[0:i], nil
+	} else if atEOF && len(data) != 0 {
+		// Data at the end of the file without a null terminator.
+		return 0, nil, errors.New("Expected null byte terminator")
+	} else {
+		// Request more data.
+		return 0, nil, nil
+	}
+}
+
+// Parses Postfix's binary format.
+func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
+	scanner := bufio.NewScanner(file)
+	scanner.Split(ScanNullTerminatedEntries)
+
+	// Histograms tracking the messages by size and age.
+	sizeHistogram := prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: "postfix",
+			Name:      "queue_message_size_bytes",
+			Help:      "Size of messages in Postfix's message queue, in bytes",
+			Buckets:   []float64{1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9},
+		})
+	ageHistogram := prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: "postfix",
+			Name:      "queue_message_age_seconds",
+			Help:      "Age of messages in Postfix's message queue, in seconds",
+			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
+		})
+
+	now := float64(time.Now().UnixNano()) / 1e9
+	for scanner.Scan() {
+		// Parse a key/value entry.
+		key := scanner.Text()
+		if len(key) == 0 {
+			// Empty key means a record separator. We don't care.
+			continue
+		}
+		if !scanner.Scan() {
+			return fmt.Errorf("Key %q does not have a value\n", key)
+		}
+		value := scanner.Text()
+
+		if key == "size" {
+			// Message size in bytes.
+			size, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return err
+			}
+			sizeHistogram.Observe(size)
+		} else if key == "time" {
+			// Message time as a UNIX timestamp.
+			time, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return err
+			}
+			ageHistogram.Observe(now - time)
 		}
 	}
 
