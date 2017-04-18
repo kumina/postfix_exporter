@@ -167,7 +167,7 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 		key := scanner.Text()
 		if len(key) == 0 {
 			// Empty key means a record separator.
-			queue := "unknown"
+			queue = "unknown"
 			continue
 		}
 		if !scanner.Scan() {
