@@ -62,30 +62,40 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 
 	// Regular expression for matching postqueue's output. Example:
 	// "A07A81514      5156 Tue Feb 14 13:13:54  MAILER-DAEMON"
-	messageLine := regexp.MustCompile("^[0-9A-F]+ +(\\d+) (\\w{3} \\w{3} +\\d+ +\\d+:\\d{2}:\\d{2}) +")
+	messageLine := regexp.MustCompile("^[0-9A-F]+([\\*!]?) +(\\d+) (\\w{3} \\w{3} +\\d+ +\\d+:\\d{2}:\\d{2}) +")
 
 	// Histograms tracking the messages by size and age.
-	sizeHistogram := prometheus.NewHistogram(
+	sizeHistogram := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "postfix",
 			Name:      "queue_message_size_bytes",
 			Help:      "Size of messages in Postfix's message queue, in bytes",
 			Buckets:   []float64{1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9},
-		})
-	ageHistogram := prometheus.NewHistogram(
+		},
+		[]string{"queue"})
+	ageHistogram := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "postfix",
 			Name:      "queue_message_age_seconds",
 			Help:      "Age of messages in Postfix's message queue, in seconds",
 			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
-		})
+		},
+		[]string{"queue"})
 
 	now := time.Now()
 	for scanner.Scan() {
 		matches := messageLine.FindStringSubmatch(scanner.Text())
 		if matches != nil {
+			// Derive the name of the message queue.
+			queue := "other"
+			if matches[1] == "*" {
+				queue = "active"
+			} else if matches[1] == "!" {
+				queue = "hold"
+			}
+
 			// Parse the message size.
-			size, err := strconv.ParseFloat(matches[1], 64)
+			size, err := strconv.ParseFloat(matches[2], 64)
 			if err != nil {
 				return err
 			}
@@ -94,7 +104,7 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 			// output contains no year number. Assume it
 			// applies to the last year for which the
 			// message date doesn't exceed time.Now().
-			date, err := time.Parse("Mon Jan 2 15:04:05", matches[2])
+			date, err := time.Parse("Mon Jan 2 15:04:05", matches[3])
 			if err != nil {
 				return err
 			}
@@ -103,13 +113,13 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 				date = date.AddDate(-1, 0, 0)
 			}
 
-			sizeHistogram.Observe(size)
-			ageHistogram.Observe(now.Sub(date).Seconds())
+			sizeHistogram.WithLabelValues(queue).Observe(size)
+			ageHistogram.WithLabelValues(queue).Observe(now.Sub(date).Seconds())
 		}
 	}
 
-	ch <- sizeHistogram
-	ch <- ageHistogram
+	sizeHistogram.Collect(ch)
+	ageHistogram.Collect(ch)
 	return scanner.Err()
 }
 
@@ -133,27 +143,31 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 	scanner.Split(ScanNullTerminatedEntries)
 
 	// Histograms tracking the messages by size and age.
-	sizeHistogram := prometheus.NewHistogram(
+	sizeHistogram := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "postfix",
 			Name:      "queue_message_size_bytes",
 			Help:      "Size of messages in Postfix's message queue, in bytes",
 			Buckets:   []float64{1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9},
-		})
-	ageHistogram := prometheus.NewHistogram(
+		},
+		[]string{"queue"})
+	ageHistogram := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "postfix",
 			Name:      "queue_message_age_seconds",
 			Help:      "Age of messages in Postfix's message queue, in seconds",
 			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
-		})
+		},
+		[]string{"queue"})
 
 	now := float64(time.Now().UnixNano()) / 1e9
+	queue := "unknown"
 	for scanner.Scan() {
 		// Parse a key/value entry.
 		key := scanner.Text()
 		if len(key) == 0 {
-			// Empty key means a record separator. We don't care.
+			// Empty key means a record separator.
+			queue := "unknown"
 			continue
 		}
 		if !scanner.Scan() {
@@ -161,25 +175,28 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 		}
 		value := scanner.Text()
 
-		if key == "size" {
+		if key == "queue_name" {
+			// The name of the message queue.
+			queue = value
+		} else if key == "size" {
 			// Message size in bytes.
 			size, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return err
 			}
-			sizeHistogram.Observe(size)
+			sizeHistogram.WithLabelValues(queue).Observe(size)
 		} else if key == "time" {
 			// Message time as a UNIX timestamp.
 			time, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return err
 			}
-			ageHistogram.Observe(now - time)
+			ageHistogram.WithLabelValues(queue).Observe(now - time)
 		}
 	}
 
-	ch <- sizeHistogram
-	ch <- ageHistogram
+	sizeHistogram.Collect(ch)
+	ageHistogram.Collect(ch)
 	return scanner.Err()
 }
 
