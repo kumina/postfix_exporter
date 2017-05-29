@@ -111,6 +111,7 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 		[]string{"queue"})
 
 	now := time.Now()
+	location, _ := time.LoadLocation("Local")
 	for scanner.Scan() {
 		matches := messageLine.FindStringSubmatch(scanner.Text())
 		if matches != nil {
@@ -132,7 +133,8 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 			// output contains no year number. Assume it
 			// applies to the last year for which the
 			// message date doesn't exceed time.Now().
-			date, err := time.Parse("Mon Jan 2 15:04:05", matches[3])
+			date, err := time.ParseInLocation("Mon Jan 2 15:04:05",
+				matches[3], location)
 			if err != nil {
 				return err
 			}
