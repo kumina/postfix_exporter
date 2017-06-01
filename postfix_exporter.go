@@ -96,7 +96,7 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 	sizeHistogram := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "postfix",
-			Name:      "queue_message_size_bytes",
+			Name:      "showq_message_size_bytes",
 			Help:      "Size of messages in Postfix's message queue, in bytes",
 			Buckets:   []float64{1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9},
 		},
@@ -104,7 +104,7 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 	ageHistogram := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "postfix",
-			Name:      "queue_message_age_seconds",
+			Name:      "showq_message_age_seconds",
 			Help:      "Age of messages in Postfix's message queue, in seconds",
 			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
 		},
@@ -177,7 +177,7 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 	sizeHistogram := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "postfix",
-			Name:      "queue_message_size_bytes",
+			Name:      "showq_message_size_bytes",
 			Help:      "Size of messages in Postfix's message queue, in bytes",
 			Buckets:   []float64{1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9},
 		},
@@ -185,7 +185,7 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 	ageHistogram := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "postfix",
-			Name:      "queue_message_age_seconds",
+			Name:      "showq_message_age_seconds",
 			Help:      "Age of messages in Postfix's message queue, in seconds",
 			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
 		},
@@ -486,7 +486,7 @@ func NewPostfixExporter(showqPath string, logfilePath string) (*PostfixExporter,
 			[]string{"code"}),
 		smtpdSASLAuthenticationFailures: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "postfix",
-			Name:      "smtpd_sasl_authentication_failures",
+			Name:      "smtpd_sasl_authentication_failures_total",
 			Help:      "Total number of SASL authentication failures.",
 		}),
 		smtpdTLSConnects: prometheus.NewCounterVec(
