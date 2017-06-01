@@ -460,7 +460,7 @@ func NewPostfixExporter(showqPath string, logfilePath string) (*PostfixExporter,
 		}),
 		smtpdFCrDNSErrors: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "postfix",
-			Name:      "smtpd_forward_confirmed_reverse_dns_errors",
+			Name:      "smtpd_forward_confirmed_reverse_dns_errors_total",
 			Help:      "Total number of connections for which forward-confirmed DNS cannot be resolved.",
 		}),
 		smtpdLostConnections: prometheus.NewCounterVec(
