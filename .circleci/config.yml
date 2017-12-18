@@ -1,0 +1,32 @@
+version: 2
+
+jobs:
+  build-push:
+    docker:
+      - image: circleci/golang:1.9
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: get dependencies
+          command: |
+            go get -d
+      - run:
+          name: build
+          command: |
+            go build -o postfix_exporter
+      - run:
+          name: docker build
+          command: |
+            docker build -t honestica/postfix_exporter:$CIRCLE_BRANCH-$CIRCLE_BUILD_NUM .
+      - run:
+          name: docker push
+          command: |
+            docker login -u $DOCKER_HUB_USER -p $DOCKER_HUB_PASS
+            docker push honestica/postfix_exporter:$CIRCLE_BRANCH-$CIRCLE_BUILD_NUM
+workflows:
+  version: 2
+  master-flow:
+    jobs:
+      - build-push
