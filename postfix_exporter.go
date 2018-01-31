@@ -92,6 +92,20 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 	// "A07A81514      5156 Tue Feb 14 13:13:54  MAILER-DAEMON"
 	messageLine := regexp.MustCompile("^[0-9A-F]+([\\*!]?) +(\\d+) (\\w{3} \\w{3} +\\d+ +\\d+:\\d{2}:\\d{2}) +")
 
+	// Gauge tracking the message count by queue.
+	countGauge := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "postfix",
+			Name:      "showq_message_count",
+			Help:      "Amount of messages in Postfix's message queue",
+		},
+		[]string{"queue"})
+
+	for _, queue := range []string{"active", "hold", "other"} {
+		// Pre-setting these keys ensures we expose a 0 count for empty queues.
+		countGauge.WithLabelValues(queue).Set(0)
+	}
+
 	// Histograms tracking the messages by size and age.
 	sizeHistogram := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -143,11 +157,13 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 				date = date.AddDate(-1, 0, 0)
 			}
 
+			countGauge.WithLabelValues(queue).Inc()
 			sizeHistogram.WithLabelValues(queue).Observe(size)
 			ageHistogram.WithLabelValues(queue).Observe(now.Sub(date).Seconds())
 		}
 	}
 
+	countGauge.Collect(ch)
 	sizeHistogram.Collect(ch)
 	ageHistogram.Collect(ch)
 	return scanner.Err()
@@ -172,6 +188,20 @@ func ScanNullTerminatedEntries(data []byte, atEOF bool) (advance int, token []by
 func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(ScanNullTerminatedEntries)
+
+	// Gauge tracking the message count by queue.
+	countGauge := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "postfix",
+			Name:      "showq_message_count",
+			Help:      "Amount of messages in Postfix's message queue",
+		},
+		[]string{"queue"})
+
+	for _, queue := range []string{"active", "deferred", "hold", "incoming", "maildrop"} {
+		// Pre-setting these keys ensures we expose a 0 count for empty queues.
+		countGauge.WithLabelValues(queue).Set(0)
+	}
 
 	// Histograms tracking the messages by size and age.
 	sizeHistogram := prometheus.NewHistogramVec(
@@ -209,6 +239,7 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 		if key == "queue_name" {
 			// The name of the message queue.
 			queue = value
+			countGauge.WithLabelValues(queue).Inc()
 		} else if key == "size" {
 			// Message size in bytes.
 			size, err := strconv.ParseFloat(value, 64)
@@ -226,6 +257,7 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 		}
 	}
 
+	countGauge.Collect(ch)
 	sizeHistogram.Collect(ch)
 	ageHistogram.Collect(ch)
 	return scanner.Err()
