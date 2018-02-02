@@ -16,5 +16,8 @@ entries to a second file:
 mail.* -/var/log/postfix_exporter_input.log
 ```
 
+There is also an option to collect the metrics via the systemd journal instead of a log file.
+
+
 Please refer to this utility's `main()` function for a list of supported
 command line flags.
