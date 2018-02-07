@@ -111,6 +111,7 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 		},
 		[]string{"queue"})
 
+	// Initialize all queue buckets to zero.
 	for _, q := range []string{"active", "hold", "other"} {
 		sizeHistogram.WithLabelValues(q)
 		ageHistogram.WithLabelValues(q)
@@ -197,6 +198,7 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 		},
 		[]string{"queue"})
 
+	// Initialize all queue buckets to zero.
 	for _, q := range []string{"active", "deferred", "hold", "incoming", "maildrop"} {
 		sizeHistogram.WithLabelValues(q)
 		ageHistogram.WithLabelValues(q)
