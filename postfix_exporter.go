@@ -111,6 +111,12 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 		},
 		[]string{"queue"})
 
+	// Initialize all queue buckets to zero.
+	for _, q := range []string{"active", "hold", "other"} {
+		sizeHistogram.WithLabelValues(q)
+		ageHistogram.WithLabelValues(q)
+	}
+
 	now := time.Now()
 	location, _ := time.LoadLocation("Local")
 	for scanner.Scan() {
@@ -191,6 +197,12 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
 		},
 		[]string{"queue"})
+
+	// Initialize all queue buckets to zero.
+	for _, q := range []string{"active", "deferred", "hold", "incoming", "maildrop"} {
+		sizeHistogram.WithLabelValues(q)
+		ageHistogram.WithLabelValues(q)
+	}
 
 	now := float64(time.Now().UnixNano()) / 1e9
 	queue := "unknown"
