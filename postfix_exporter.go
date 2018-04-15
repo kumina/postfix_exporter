@@ -404,29 +404,6 @@ func (e *PostfixExporter) CollectLogfileFromFile(path string) error {
 	return fd.Truncate(0)
 }
 
-// CollectLogfileFromJournal Collects entries from the systemd journal.
-func (e *PostfixExporter) CollectLogfileFromJournal() error {
-	e.journal.Lock()
-	defer e.journal.Unlock()
-
-	r := e.journal.Wait(time.Duration(1) * time.Second)
-	if r < 0 {
-		log.Print("error while waiting for journal!")
-	}
-	for {
-		m, c, err := e.journal.NextMessage()
-		if err != nil {
-			return err
-		}
-		if c == 0 {
-			break
-		}
-		e.CollectFromLogline(m)
-	}
-
-	return nil
-}
-
 // NewPostfixExporter creates a new Postfix exporter instance.
 func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal) (*PostfixExporter, error) {
 	return &PostfixExporter{
@@ -641,22 +618,20 @@ func main() {
 		metricsPath        = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 		postfixShowqPath   = flag.String("postfix.showq_path", "/var/spool/postfix/public/showq", "Path at which Postfix places its showq socket.")
 		postfixLogfilePath = flag.String("postfix.logfile_path", "/var/log/postfix_exporter_input.log", "Path where Postfix writes log entries. This file will be truncated by this exporter.")
-		systemdEnable      = flag.Bool("systemd.enable", false, "Read from the systemd journal instead of log")
-		systemdUnit        = flag.String("systemd.unit", "postfix.service", "Name of the Postfix systemd unit.")
-		systemdSlice       = flag.String("systemd.slice", "", "Name of the Postfix systemd slice. Overrides the systemd unit.")
-		systemdJournalPath = flag.String("systemd.journal_path", "", "Path to the systemd journal")
+
+		systemdEnable                                 bool
+		systemdUnit, systemdSlice, systemdJournalPath string
 	)
+	systemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath)
 	flag.Parse()
 
 	var journal *Journal
-	if *systemdEnable {
+	if systemdEnable {
 		var err error
-		journal, err = NewJournal(*systemdUnit, *systemdSlice, *systemdJournalPath)
+		journal, err = NewJournal(systemdUnit, systemdSlice, systemdJournalPath)
 		if err != nil {
 			log.Fatalf("Error opening systemd journal: %s", err)
 		}
-		// Start at end of journal
-		journal.SeekRealtimeUsec(uint64(time.Now().UnixNano() / 1000))
 		defer journal.Close()
 	}
 

@@ -1,7 +1,11 @@
+// +build !nosystemd
+
 package main
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -40,6 +44,10 @@ func NewJournal(unit, slice, path string) (j *Journal, err error) {
 			return
 		}
 	}
+
+	// Start at end of journal
+	j.SeekRealtimeUsec(uint64(time.Now().UnixNano() / 1000))
+
 	return
 }
 
@@ -75,4 +83,35 @@ func (j *Journal) NextMessage() (s string, c uint64, err error) {
 	)
 
 	return
+}
+
+// systemdFlags sets the flags for use with systemd
+func systemdFlags(enable *bool, unit, slice, path *string) {
+	flag.BoolVar(enable, "systemd.enable", false, "Read from the systemd journal instead of log")
+	flag.StringVar(unit, "systemd.unit", "postfix.service", "Name of the Postfix systemd unit.")
+	flag.StringVar(slice, "systemd.slice", "", "Name of the Postfix systemd slice. Overrides the systemd unit.")
+	flag.StringVar(path, "systemd.journal_path", "", "Path to the systemd journal")
+}
+
+// CollectLogfileFromJournal Collects entries from the systemd journal.
+func (e *PostfixExporter) CollectLogfileFromJournal() error {
+	e.journal.Lock()
+	defer e.journal.Unlock()
+
+	r := e.journal.Wait(time.Duration(1) * time.Second)
+	if r < 0 {
+		log.Print("error while waiting for journal!")
+	}
+	for {
+		m, c, err := e.journal.NextMessage()
+		if err != nil {
+			return err
+		}
+		if c == 0 {
+			break
+		}
+		e.CollectFromLogline(m)
+	}
+
+	return nil
 }
