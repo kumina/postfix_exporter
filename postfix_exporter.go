@@ -409,6 +409,10 @@ func (e *PostfixExporter) CollectLogfileFromJournal() error {
 	e.journal.Lock()
 	defer e.journal.Unlock()
 
+	r := e.journal.Wait(time.Duration(1) * time.Second)
+	if r < 0 {
+		log.Print("error while waiting for journal!")
+	}
 	for {
 		m, c, err := e.journal.NextMessage()
 		if err != nil {
