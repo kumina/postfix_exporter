@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hpcloud/tail"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -42,9 +43,9 @@ var (
 // PostfixExporter holds the state that should be preserved by the
 // Postfix Prometheus metrics exporter across scrapes.
 type PostfixExporter struct {
-	showqPath   string
-	logfilePath string
-	journal     *Journal
+	showqPath string
+	journal   *Journal
+	tailer    *tail.Tail
 
 	// Metrics that should persist after refreshes, based on logs.
 	cleanupProcesses                prometheus.Counter
@@ -375,41 +376,36 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 	}
 }
 
-// CollectLogfileFromReader collects metrics from a Postfix logfile,
-// using a reader object.
-func (e *PostfixExporter) CollectLogfileFromReader(file io.Reader) error {
-	scanner := bufio.NewScanner(file)
-	scanner.Split(bufio.ScanLines)
-
-	for scanner.Scan() {
-		e.CollectFromLogline(scanner.Text())
+// CollectLogfileFromFile tails a Postfix log file and collects entries from it.
+func (e *PostfixExporter) CollectLogfileFromFile() error {
+	for {
+		select {
+		case line := <-e.tailer.Lines:
+			e.CollectFromLogline(line.Text)
+		default:
+			return nil
+		}
 	}
-
-	return scanner.Err()
-}
-
-// CollectLogfileFromFile Collects entries from a Postfix log file and
-// truncates it. Truncation is performed to ensure that the next
-// iteration doesn't end up processing the same log entry twice.
-func (e *PostfixExporter) CollectLogfileFromFile(path string) error {
-	fd, err := os.OpenFile(path, os.O_RDWR, 0)
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-	err = e.CollectLogfileFromReader(fd)
-	if err != nil {
-		return err
-	}
-	return fd.Truncate(0)
 }
 
 // NewPostfixExporter creates a new Postfix exporter instance.
 func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal) (*PostfixExporter, error) {
+	var tailer *tail.Tail
+	if logfilePath != "" {
+		var err error
+		tailer, err = tail.TailFile(logfilePath, tail.Config{
+			ReOpen:    true, // reopen the file if it's rotated
+			MustExist: true, // fail immediately if the file is missing or has incorrect permissions
+			Follow:    true, // run in follow mode
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &PostfixExporter{
-		showqPath:   showqPath,
-		logfilePath: logfilePath,
-		journal:     journal,
+		showqPath: showqPath,
+		tailer:    tailer,
+		journal:   journal,
 
 		cleanupProcesses: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "postfix",
@@ -574,8 +570,8 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 		err = e.CollectLogfileFromJournal()
 		src = e.journal.Path
 	} else {
-		err = e.CollectLogfileFromFile(e.logfilePath)
-		src = e.logfilePath
+		err = e.CollectLogfileFromFile()
+		src = e.tailer.Filename
 	}
 	if err == nil {
 		ch <- prometheus.MustNewConstMetric(
@@ -617,7 +613,7 @@ func main() {
 		listenAddress      = flag.String("web.listen-address", ":9154", "Address to listen on for web interface and telemetry.")
 		metricsPath        = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 		postfixShowqPath   = flag.String("postfix.showq_path", "/var/spool/postfix/public/showq", "Path at which Postfix places its showq socket.")
-		postfixLogfilePath = flag.String("postfix.logfile_path", "/var/log/postfix_exporter_input.log", "Path where Postfix writes log entries. This file will be truncated by this exporter.")
+		postfixLogfilePath = flag.String("postfix.logfile_path", "/var/log/postfix_exporter_input.log", "Path where Postfix writes log entries.")
 
 		systemdEnable                                 bool
 		systemdUnit, systemdSlice, systemdJournalPath string
@@ -641,7 +637,7 @@ func main() {
 		journal,
 	)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to create PostfixExporter: %s", err)
 	}
 	prometheus.MustRegister(exporter)
 
