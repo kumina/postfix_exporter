@@ -252,14 +252,14 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 }
 
 // CollectShowqFromFile collects Postfix queue statistics from a file.
-func CollectShowqFromFile(path string, ch chan<- prometheus.Metric) error {
-	fd, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-	return CollectShowqFromReader(fd, ch)
-}
+//func CollectShowqFromFile(path string, ch chan<- prometheus.Metric) error {
+//	fd, err := os.Open(path)
+//	if err != nil {
+//		return err
+//	}
+//	defer fd.Close()
+//	return CollectShowqFromReader(fd, ch)
+//}
 
 // CollectShowqFromSocket collects Postfix queue statistics from a socket.
 func CollectShowqFromSocket(path string, ch chan<- prometheus.Metric) error {
