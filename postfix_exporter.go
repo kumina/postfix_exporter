@@ -77,7 +77,10 @@ type PostfixExporter struct {
 // for null bytes in the first 128 bytes of output.
 func CollectShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
 	reader := bufio.NewReader(file)
-	buf, _ := reader.Peek(128)
+	buf, err := reader.Peek(128)
+	if err != nil {
+		log.Printf("Could not read postfix output, %v", err)
+	}
 	if bytes.IndexByte(buf, 0) >= 0 {
 		return CollectBinaryShowqFromReader(reader, ch)
 	}
@@ -118,7 +121,11 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 	}
 
 	now := time.Now()
-	location, _ := time.LoadLocation("Local")
+	location, err := time.LoadLocation("Local")
+	if err != nil {
+		log.Println(err)
+	}
+
 	for scanner.Scan() {
 		matches := messageLine.FindStringSubmatch(scanner.Text())
 		if matches != nil {
@@ -293,35 +300,65 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 			}
 		} else if logMatches[1] == "lmtp" {
 			if lmtpMatches := lmtpPipeSMTPLine.FindStringSubmatch(logMatches[2]); lmtpMatches != nil {
-				pdelay, _ := strconv.ParseFloat(lmtpMatches[2], 64)
+				pdelay, err := strconv.ParseFloat(lmtpMatches[2], 64)
+				if err != nil {
+					log.Printf("Couldn't convert LMTP pdelay: %v", err)
+				}
 				e.lmtpDelays.WithLabelValues("before_queue_manager").Observe(pdelay)
-				adelay, _ := strconv.ParseFloat(lmtpMatches[3], 64)
+				adelay, err := strconv.ParseFloat(lmtpMatches[3], 64)
+				if err != nil {
+					log.Printf("Couldn't convert LMTP adelay: %v", err)
+				}
 				e.lmtpDelays.WithLabelValues("queue_manager").Observe(adelay)
-				sdelay, _ := strconv.ParseFloat(lmtpMatches[4], 64)
+				sdelay, err := strconv.ParseFloat(lmtpMatches[4], 64)
+				if err != nil {
+					log.Printf("Couldn't convert LMTP adelay: %v", err)
+				}
 				e.lmtpDelays.WithLabelValues("connection_setup").Observe(sdelay)
-				xdelay, _ := strconv.ParseFloat(lmtpMatches[5], 64)
+				xdelay, err := strconv.ParseFloat(lmtpMatches[5], 64)
+				if err != nil {
+					log.Printf("Couldn't convert LMTP xdelay: %v", err)
+				}
 				e.lmtpDelays.WithLabelValues("transmission").Observe(xdelay)
 			} else {
 				e.unsupportedLogEntries.WithLabelValues(logMatches[1]).Inc()
 			}
 		} else if logMatches[1] == "pipe" {
 			if pipeMatches := lmtpPipeSMTPLine.FindStringSubmatch(logMatches[2]); pipeMatches != nil {
-				pdelay, _ := strconv.ParseFloat(pipeMatches[2], 64)
+				pdelay, err := strconv.ParseFloat(pipeMatches[2], 64)
+				if err != nil {
+					log.Printf("Couldn't convert PIPE pdelay: %v", err)
+				}
 				e.pipeDelays.WithLabelValues(pipeMatches[1], "before_queue_manager").Observe(pdelay)
-				adelay, _ := strconv.ParseFloat(pipeMatches[3], 64)
+				adelay, err := strconv.ParseFloat(pipeMatches[3], 64)
+				if err != nil {
+					log.Printf("Couldn't convert PIPE adelay: %v", err)
+				}
 				e.pipeDelays.WithLabelValues(pipeMatches[1], "queue_manager").Observe(adelay)
-				sdelay, _ := strconv.ParseFloat(pipeMatches[4], 64)
+				sdelay, err := strconv.ParseFloat(pipeMatches[4], 64)
+				if err != nil {
+					log.Printf("Couldn't convert PIPE sdelay: %v", err)
+				}
 				e.pipeDelays.WithLabelValues(pipeMatches[1], "connection_setup").Observe(sdelay)
-				xdelay, _ := strconv.ParseFloat(pipeMatches[5], 64)
+				xdelay, err := strconv.ParseFloat(pipeMatches[5], 64)
+				if err != nil {
+					log.Printf("Couldn't convert PIPE xdelay: %v", err)
+				}
 				e.pipeDelays.WithLabelValues(pipeMatches[1], "transmission").Observe(xdelay)
 			} else {
 				e.unsupportedLogEntries.WithLabelValues(logMatches[1]).Inc()
 			}
 		} else if logMatches[1] == "qmgr" {
 			if qmgrInsertMatches := qmgrInsertLine.FindStringSubmatch(logMatches[2]); qmgrInsertMatches != nil {
-				size, _ := strconv.ParseFloat(qmgrInsertMatches[1], 64)
+				size, err := strconv.ParseFloat(qmgrInsertMatches[1], 64)
+				if err != nil {
+					log.Printf("Couldn't convert QMGR size: %v", err)
+				}
 				e.qmgrInsertsSize.Observe(size)
-				nrcpt, _ := strconv.ParseFloat(qmgrInsertMatches[2], 64)
+				nrcpt, err := strconv.ParseFloat(qmgrInsertMatches[2], 64)
+				if err != nil {
+					log.Printf("Couldn't convert QMGR nrcpt: %v", err)
+				}
 				e.qmgrInsertsNrcpt.Observe(nrcpt)
 			} else if strings.HasSuffix(logMatches[2], ": removed") {
 				e.qmgrRemoves.Inc()
@@ -330,13 +367,25 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 			}
 		} else if logMatches[1] == "smtp" {
 			if smtpMatches := lmtpPipeSMTPLine.FindStringSubmatch(logMatches[2]); smtpMatches != nil {
-				pdelay, _ := strconv.ParseFloat(smtpMatches[2], 64)
+				pdelay, err := strconv.ParseFloat(smtpMatches[2], 64)
+				if err != nil {
+					log.Printf("Couldn't convert SMTP pdelay: %v", err)
+				}
 				e.smtpDelays.WithLabelValues("before_queue_manager").Observe(pdelay)
-				adelay, _ := strconv.ParseFloat(smtpMatches[3], 64)
+				adelay, err := strconv.ParseFloat(smtpMatches[3], 64)
+				if err != nil {
+					log.Printf("Couldn't convert SMTP adelay: %v", err)
+				}
 				e.smtpDelays.WithLabelValues("queue_manager").Observe(adelay)
-				sdelay, _ := strconv.ParseFloat(smtpMatches[4], 64)
+				sdelay, err := strconv.ParseFloat(smtpMatches[4], 64)
+				if err != nil {
+					log.Printf("Couldn't convert SMTP sdelay: %v", err)
+				}
 				e.smtpDelays.WithLabelValues("connection_setup").Observe(sdelay)
-				xdelay, _ := strconv.ParseFloat(smtpMatches[5], 64)
+				xdelay, err := strconv.ParseFloat(smtpMatches[5], 64)
+				if err != nil {
+					log.Printf("Couldn't convert SMTP xdelay: %v", err)
+				}
 				e.smtpDelays.WithLabelValues("transmission").Observe(xdelay)
 			} else if smtpTLSMatches := smtpTLSLine.FindStringSubmatch(logMatches[2]); smtpTLSMatches != nil {
 				e.smtpTLSConnects.WithLabelValues(smtpTLSMatches[1:]...).Inc()
@@ -647,7 +696,7 @@ func main() {
 
 	http.Handle(*metricsPath, prometheus.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`
+		_, err = w.Write([]byte(`
 			<html>
 			<head><title>Postfix Exporter</title></head>
 			<body>
@@ -655,6 +704,9 @@ func main() {
 			<p><a href='` + *metricsPath + `'>Metrics</a></p>
 			</body>
 			</html>`))
+		if err != nil {
+			panic(err)
+		}
 	})
 
 	log.Print("Listening on ", *listenAddress)
