@@ -46,8 +46,10 @@ func NewJournal(unit, slice, path string) (j *Journal, err error) {
 	}
 
 	// Start at end of journal
-	j.SeekRealtimeUsec(uint64(time.Now().UnixNano() / 1000))
-
+	err = j.SeekRealtimeUsec(uint64(time.Now().UnixNano() / 1000))
+	if err != nil {
+		log.Printf("%v", err)
+	}
 	return
 }
 
