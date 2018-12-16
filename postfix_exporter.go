@@ -94,7 +94,7 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 
 	// Regular expression for matching postqueue's output. Example:
 	// "A07A81514      5156 Tue Feb 14 13:13:54  MAILER-DAEMON"
-	messageLine := regexp.MustCompile("^[0-9A-F]+([\\*!]?) +(\\d+) (\\w{3} \\w{3} +\\d+ +\\d+:\\d{2}:\\d{2}) +")
+	messageLine := regexp.MustCompile(`^[0-9A-F]+([\*!]?) +(\d+) (\w{3} \w{3} +\d+ +\d+:\d{2}:\d{2}) +`)
 
 	// Histograms tracking the messages by size and age.
 	sizeHistogram := prometheus.NewHistogramVec(
@@ -273,16 +273,16 @@ func CollectShowqFromSocket(path string, ch chan<- prometheus.Metric) error {
 
 // Patterns for parsing log messages.
 var (
-	logLine                             = regexp.MustCompile(" ?postfix/(\\w+)\\[\\d+\\]: (.*)")
-	lmtpPipeSMTPLine                    = regexp.MustCompile(", relay=(\\S+), .*, delays=([0-9\\.]+)/([0-9\\.]+)/([0-9\\.]+)/([0-9\\.]+), ")
-	qmgrInsertLine                      = regexp.MustCompile(":.*, size=(\\d+), nrcpt=(\\d+) ")
-	smtpTLSLine                         = regexp.MustCompile("^(\\S+) TLS connection established to \\S+: (\\S+) with cipher (\\S+) \\((\\d+)/(\\d+) bits\\)$")
-	smtpdFCrDNSErrorsLine               = regexp.MustCompile("^warning: hostname \\S+ does not resolve to address ")
-	smtpdProcessesSASLLine              = regexp.MustCompile(": client=.*, sasl_username=(\\S+)")
-	smtpdRejectsLine                    = regexp.MustCompile("^NOQUEUE: reject: RCPT from \\S+: ([0-9]+) ")
-	smtpdLostConnectionLine             = regexp.MustCompile("^lost connection after (\\w+) from ")
-	smtpdSASLAuthenticationFailuresLine = regexp.MustCompile("^warning: \\S+: SASL \\S+ authentication failed: ")
-	smtpdTLSLine                        = regexp.MustCompile("^(\\S+) TLS connection established from \\S+: (\\S+) with cipher (\\S+) \\((\\d+)/(\\d+) bits\\)$")
+	logLine                             = regexp.MustCompile(` ?postfix/(\w+)\[\d+\]: (.*)`)
+	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
+	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
+	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)$`)
+	smtpdFCrDNSErrorsLine               = regexp.MustCompile(`^warning: hostname \S+ does not resolve to address `)
+	smtpdProcessesSASLLine              = regexp.MustCompile(`: client=.*, sasl_username=(\S+)`)
+	smtpdRejectsLine                    = regexp.MustCompile(`^NOQUEUE: reject: RCPT from \S+: ([0-9]+) `)
+	smtpdLostConnectionLine             = regexp.MustCompile(`^lost connection after (\w+) from `)
+	smtpdSASLAuthenticationFailuresLine = regexp.MustCompile(`^warning: \S+: SASL \S+ authentication failed: `)
+	smtpdTLSLine                        = regexp.MustCompile(`^(\S+) TLS connection established from \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)$`)
 )
 
 // CollectFromLogline collects metrict from a Postfix log line.
