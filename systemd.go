@@ -3,12 +3,12 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 
+	"github.com/alecthomas/kingpin"
 	"github.com/coreos/go-systemd/sdjournal"
 )
 
@@ -88,11 +88,11 @@ func (j *Journal) NextMessage() (s string, c uint64, err error) {
 }
 
 // systemdFlags sets the flags for use with systemd
-func systemdFlags(enable *bool, unit, slice, path *string) {
-	flag.BoolVar(enable, "systemd.enable", false, "Read from the systemd journal instead of log")
-	flag.StringVar(unit, "systemd.unit", "postfix.service", "Name of the Postfix systemd unit.")
-	flag.StringVar(slice, "systemd.slice", "", "Name of the Postfix systemd slice. Overrides the systemd unit.")
-	flag.StringVar(path, "systemd.journal_path", "", "Path to the systemd journal")
+func systemdFlags(enable *bool, unit, slice, path *string, app *kingpin.Application) {
+	app.Flag("systemd.enable", "Read from the systemd journal instead of log").Default("false").BoolVar(enable)
+	app.Flag("systemd.unit", "Name of the Postfix systemd unit.").Default("postfix.service").StringVar(unit)
+	app.Flag("systemd.slice", "Name of the Postfix systemd slice. Overrides the systemd unit.").Default("").StringVar(slice)
+	app.Flag("systemd.journal_path", "Path to the systemd journal").Default("").StringVar(path)
 }
 
 // CollectLogfileFromJournal Collects entries from the systemd journal.
