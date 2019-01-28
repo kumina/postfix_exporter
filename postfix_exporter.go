@@ -311,66 +311,26 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 		}
 	case "lmtp":
 		if lmtpMatches := lmtpPipeSMTPLine.FindStringSubmatch(logMatches[2]); lmtpMatches != nil {
-			pdelay, err := strconv.ParseFloat(lmtpMatches[2], 64)
-			if err != nil {
-				log.Printf("Couldn't convert LMTP pdelay: %v", err)
-			}
-			e.lmtpDelays.WithLabelValues("before_queue_manager").Observe(pdelay)
-			adelay, err := strconv.ParseFloat(lmtpMatches[3], 64)
-			if err != nil {
-				log.Printf("Couldn't convert LMTP adelay: %v", err)
-			}
-			e.lmtpDelays.WithLabelValues("queue_manager").Observe(adelay)
-			sdelay, err := strconv.ParseFloat(lmtpMatches[4], 64)
-			if err != nil {
-				log.Printf("Couldn't convert LMTP adelay: %v", err)
-			}
-			e.lmtpDelays.WithLabelValues("connection_setup").Observe(sdelay)
-			xdelay, err := strconv.ParseFloat(lmtpMatches[5], 64)
-			if err != nil {
-				log.Printf("Couldn't convert LMTP xdelay: %v", err)
-			}
-			e.lmtpDelays.WithLabelValues("transmission").Observe(xdelay)
+			addToHistogramVec(e.lmtpDelays, lmtpMatches[2], "LMTP pdelay", "before_queue_manager")
+			addToHistogramVec(e.lmtpDelays, lmtpMatches[3], "LMTP adelay", "queue_manager")
+			addToHistogramVec(e.lmtpDelays, lmtpMatches[4], "LMTP sdelay", "connection_setup")
+			addToHistogramVec(e.lmtpDelays, lmtpMatches[5], "LMTP xdelay", "transmission")
 		} else {
 			e.unsupportedLogEntries.WithLabelValues(logMatches[1]).Inc()
 		}
 	case "pipe":
 		if pipeMatches := lmtpPipeSMTPLine.FindStringSubmatch(logMatches[2]); pipeMatches != nil {
-			pdelay, err := strconv.ParseFloat(pipeMatches[2], 64)
-			if err != nil {
-				log.Printf("Couldn't convert PIPE pdelay: %v", err)
-			}
-			e.pipeDelays.WithLabelValues(pipeMatches[1], "before_queue_manager").Observe(pdelay)
-			adelay, err := strconv.ParseFloat(pipeMatches[3], 64)
-			if err != nil {
-				log.Printf("Couldn't convert PIPE adelay: %v", err)
-			}
-			e.pipeDelays.WithLabelValues(pipeMatches[1], "queue_manager").Observe(adelay)
-			sdelay, err := strconv.ParseFloat(pipeMatches[4], 64)
-			if err != nil {
-				log.Printf("Couldn't convert PIPE sdelay: %v", err)
-			}
-			e.pipeDelays.WithLabelValues(pipeMatches[1], "connection_setup").Observe(sdelay)
-			xdelay, err := strconv.ParseFloat(pipeMatches[5], 64)
-			if err != nil {
-				log.Printf("Couldn't convert PIPE xdelay: %v", err)
-			}
-			e.pipeDelays.WithLabelValues(pipeMatches[1], "transmission").Observe(xdelay)
+			addToHistogramVec(e.pipeDelays, pipeMatches[2], "PIPE pdelay", pipeMatches[1], "before_queue_manager")
+			addToHistogramVec(e.pipeDelays, pipeMatches[3], "PIPE adelay", pipeMatches[1], "queue_manager")
+			addToHistogramVec(e.pipeDelays, pipeMatches[4], "PIPE sdelay", pipeMatches[1], "connection_setup")
+			addToHistogramVec(e.pipeDelays, pipeMatches[5], "PIPE xdelay", pipeMatches[1], "transmission")
 		} else {
 			e.unsupportedLogEntries.WithLabelValues(logMatches[1]).Inc()
 		}
 	case "qmgr":
 		if qmgrInsertMatches := qmgrInsertLine.FindStringSubmatch(logMatches[2]); qmgrInsertMatches != nil {
-			size, err := strconv.ParseFloat(qmgrInsertMatches[1], 64)
-			if err != nil {
-				log.Printf("Couldn't convert QMGR size: %v", err)
-			}
-			e.qmgrInsertsSize.Observe(size)
-			nrcpt, err := strconv.ParseFloat(qmgrInsertMatches[2], 64)
-			if err != nil {
-				log.Printf("Couldn't convert QMGR nrcpt: %v", err)
-			}
-			e.qmgrInsertsNrcpt.Observe(nrcpt)
+			addToHistogram(e.qmgrInsertsSize, qmgrInsertMatches[1], "QMGR size")
+			addToHistogram(e.qmgrInsertsNrcpt, qmgrInsertMatches[2], "QMGR nrcpt")
 		} else if strings.HasSuffix(logMatches[2], ": removed") {
 			e.qmgrRemoves.Inc()
 		} else {
@@ -378,26 +338,10 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 		}
 	case "smtp":
 		if smtpMatches := lmtpPipeSMTPLine.FindStringSubmatch(logMatches[2]); smtpMatches != nil {
-			pdelay, err := strconv.ParseFloat(smtpMatches[2], 64)
-			if err != nil {
-				log.Printf("Couldn't convert SMTP pdelay: %v", err)
-			}
-			e.smtpDelays.WithLabelValues("before_queue_manager").Observe(pdelay)
-			adelay, err := strconv.ParseFloat(smtpMatches[3], 64)
-			if err != nil {
-				log.Printf("Couldn't convert SMTP adelay: %v", err)
-			}
-			e.smtpDelays.WithLabelValues("queue_manager").Observe(adelay)
-			sdelay, err := strconv.ParseFloat(smtpMatches[4], 64)
-			if err != nil {
-				log.Printf("Couldn't convert SMTP sdelay: %v", err)
-			}
-			e.smtpDelays.WithLabelValues("connection_setup").Observe(sdelay)
-			xdelay, err := strconv.ParseFloat(smtpMatches[5], 64)
-			if err != nil {
-				log.Printf("Couldn't convert SMTP xdelay: %v", err)
-			}
-			e.smtpDelays.WithLabelValues("transmission").Observe(xdelay)
+			addToHistogramVec(e.smtpDelays, smtpMatches[2], "before_queue_manager")
+			addToHistogramVec(e.smtpDelays, smtpMatches[3], "queue_manager")
+			addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup")
+			addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission")
 		} else if smtpTLSMatches := smtpTLSLine.FindStringSubmatch(logMatches[2]); smtpTLSMatches != nil {
 			e.smtpTLSConnects.WithLabelValues(smtpTLSMatches[1:]...).Inc()
 		} else {
@@ -429,6 +373,22 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 		// Unknown Postfix service.
 		e.unsupportedLogEntries.WithLabelValues(logMatches[1]).Inc()
 	}
+}
+
+func addToHistogram(h prometheus.Histogram, value, fieldName string) {
+	float, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		log.Printf("Couldn't convert value '%s' for %v: %v", value, fieldName, err)
+	}
+	h.Observe(float)
+}
+
+func addToHistogramVec(h *prometheus.HistogramVec, value, fieldName string, labels ...string) {
+	float, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		log.Printf("Couldn't convert value '%s' for %v: %v", value, fieldName, err)
+	}
+	h.WithLabelValues(labels...).Observe(float)
 }
 
 // CollectLogfileFromFile tails a Postfix log file and collects entries from it.
