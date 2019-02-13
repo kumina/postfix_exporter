@@ -78,7 +78,7 @@ type PostfixExporter struct {
 func CollectShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
 	reader := bufio.NewReader(file)
 	buf, err := reader.Peek(128)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		log.Printf("Could not read postfix output, %v", err)
 	}
 	if bytes.IndexByte(buf, 0) >= 0 {
