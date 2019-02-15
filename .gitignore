@@ -1,2 +1,9 @@
+# Editor files
+*~
+-.idea/
+
+# Test binary, build with `go test -c`
+*.test
+
+# Binaries
 postfix_exporter
-.idea/

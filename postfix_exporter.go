@@ -17,8 +17,8 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"flag"
 	"fmt"
+	"github.com/alecthomas/kingpin"
 	"io"
 	"log"
 	"net"
@@ -78,7 +78,10 @@ type PostfixExporter struct {
 // for null bytes in the first 128 bytes of output.
 func CollectShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
 	reader := bufio.NewReader(file)
-	buf, _ := reader.Peek(128)
+	buf, err := reader.Peek(128)
+	if err != nil && err != io.EOF {
+		log.Printf("Could not read postfix output, %v", err)
+	}
 	if bytes.IndexByte(buf, 0) >= 0 {
 		return CollectBinaryShowqFromReader(reader, ch)
 	}
@@ -92,7 +95,7 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 
 	// Regular expression for matching postqueue's output. Example:
 	// "A07A81514      5156 Tue Feb 14 13:13:54  MAILER-DAEMON"
-	messageLine := regexp.MustCompile("^[0-9A-F]+([\\*!]?) +(\\d+) (\\w{3} \\w{3} +\\d+ +\\d+:\\d{2}:\\d{2}) +")
+	messageLine := regexp.MustCompile(`^[0-9A-F]+([\*!]?) +(\d+) (\w{3} \w{3} +\d+ +\d+:\d{2}:\d{2}) +`)
 
 	// Histograms tracking the messages by size and age.
 	sizeHistogram := prometheus.NewHistogramVec(
@@ -119,7 +122,11 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 	}
 
 	now := time.Now()
-	location, _ := time.LoadLocation("Local")
+	location, err := time.LoadLocation("Local")
+	if err != nil {
+		log.Println(err)
+	}
+
 	for scanner.Scan() {
 		matches := messageLine.FindStringSubmatch(scanner.Text())
 		if matches != nil {
@@ -232,11 +239,11 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 			sizeHistogram.WithLabelValues(queue).Observe(size)
 		} else if key == "time" {
 			// Message time as a UNIX timestamp.
-			time, err := strconv.ParseFloat(value, 64)
+			utime, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return err
 			}
-			ageHistogram.WithLabelValues(queue).Observe(now - time)
+			ageHistogram.WithLabelValues(queue).Observe(now - utime)
 		}
 	}
 
@@ -246,14 +253,14 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 }
 
 // CollectShowqFromFile collects Postfix queue statistics from a file.
-func CollectShowqFromFile(path string, ch chan<- prometheus.Metric) error {
-	fd, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-	return CollectShowqFromReader(fd, ch)
-}
+//func CollectShowqFromFile(path string, ch chan<- prometheus.Metric) error {
+//	fd, err := os.Open(path)
+//	if err != nil {
+//		return err
+//	}
+//	defer fd.Close()
+//	return CollectShowqFromReader(fd, ch)
+//}
 
 // CollectShowqFromSocket collects Postfix queue statistics from a socket.
 func CollectShowqFromSocket(path string, ch chan<- prometheus.Metric) error {
@@ -267,16 +274,16 @@ func CollectShowqFromSocket(path string, ch chan<- prometheus.Metric) error {
 
 // Patterns for parsing log messages.
 var (
-	logLine                             = regexp.MustCompile(" ?postfix/(\\w+)\\[\\d+\\]: (.*)")
-	lmtpPipeSMTPLine                    = regexp.MustCompile(", relay=(\\S+), .*, delays=([0-9\\.]+)/([0-9\\.]+)/([0-9\\.]+)/([0-9\\.]+), ")
-	qmgrInsertLine                      = regexp.MustCompile(":.*, size=(\\d+), nrcpt=(\\d+) ")
-	smtpTLSLine                         = regexp.MustCompile("^(\\S+) TLS connection established to \\S+: (\\S+) with cipher (\\S+) \\((\\d+)/(\\d+) bits\\)$")
-	smtpdFCrDNSErrorsLine               = regexp.MustCompile("^warning: hostname \\S+ does not resolve to address ")
-	smtpdProcessesSASLLine              = regexp.MustCompile(": client=.*, sasl_username=(\\S+)")
-	smtpdRejectsLine                    = regexp.MustCompile("^NOQUEUE: reject: RCPT from \\S+: ([0-9]+) ")
-	smtpdLostConnectionLine             = regexp.MustCompile("^lost connection after (\\w+) from ")
-	smtpdSASLAuthenticationFailuresLine = regexp.MustCompile("^warning: \\S+: SASL \\S+ authentication failed: ")
-	smtpdTLSLine                        = regexp.MustCompile("^(\\S+) TLS connection established from \\S+: (\\S+) with cipher (\\S+) \\((\\d+)/(\\d+) bits\\)$")
+	logLine                             = regexp.MustCompile(` ?postfix/(\w+)\[\d+\]: (.*)`)
+	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
+	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
+	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)$`)
+	smtpdFCrDNSErrorsLine               = regexp.MustCompile(`^warning: hostname \S+ does not resolve to address `)
+	smtpdProcessesSASLLine              = regexp.MustCompile(`: client=.*, sasl_username=(\S+)`)
+	smtpdRejectsLine                    = regexp.MustCompile(`^NOQUEUE: reject: RCPT from \S+: ([0-9]+) `)
+	smtpdLostConnectionLine             = regexp.MustCompile(`^lost connection after (\w+) from `)
+	smtpdSASLAuthenticationFailuresLine = regexp.MustCompile(`^warning: \S+: SASL \S+ authentication failed: `)
+	smtpdTLSLine                        = regexp.MustCompile(`^(\S+) TLS connection established from \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)$`)
 )
 
 // CollectFromLogline collects metrict from a Postfix log line.
@@ -294,35 +301,65 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 			}
 		} else if logMatches[1] == "lmtp" {
 			if lmtpMatches := lmtpPipeSMTPLine.FindStringSubmatch(logMatches[2]); lmtpMatches != nil {
-				pdelay, _ := strconv.ParseFloat(lmtpMatches[2], 64)
+				pdelay, err := strconv.ParseFloat(lmtpMatches[2], 64)
+				if err != nil {
+					log.Printf("Couldn't convert LMTP pdelay: %v", err)
+				}
 				e.lmtpDelays.WithLabelValues("before_queue_manager").Observe(pdelay)
-				adelay, _ := strconv.ParseFloat(lmtpMatches[3], 64)
+				adelay, err := strconv.ParseFloat(lmtpMatches[3], 64)
+				if err != nil {
+					log.Printf("Couldn't convert LMTP adelay: %v", err)
+				}
 				e.lmtpDelays.WithLabelValues("queue_manager").Observe(adelay)
-				sdelay, _ := strconv.ParseFloat(lmtpMatches[4], 64)
+				sdelay, err := strconv.ParseFloat(lmtpMatches[4], 64)
+				if err != nil {
+					log.Printf("Couldn't convert LMTP adelay: %v", err)
+				}
 				e.lmtpDelays.WithLabelValues("connection_setup").Observe(sdelay)
-				xdelay, _ := strconv.ParseFloat(lmtpMatches[5], 64)
+				xdelay, err := strconv.ParseFloat(lmtpMatches[5], 64)
+				if err != nil {
+					log.Printf("Couldn't convert LMTP xdelay: %v", err)
+				}
 				e.lmtpDelays.WithLabelValues("transmission").Observe(xdelay)
 			} else {
 				e.unsupportedLogEntries.WithLabelValues(logMatches[1]).Inc()
 			}
 		} else if logMatches[1] == "pipe" {
 			if pipeMatches := lmtpPipeSMTPLine.FindStringSubmatch(logMatches[2]); pipeMatches != nil {
-				pdelay, _ := strconv.ParseFloat(pipeMatches[2], 64)
+				pdelay, err := strconv.ParseFloat(pipeMatches[2], 64)
+				if err != nil {
+					log.Printf("Couldn't convert PIPE pdelay: %v", err)
+				}
 				e.pipeDelays.WithLabelValues(pipeMatches[1], "before_queue_manager").Observe(pdelay)
-				adelay, _ := strconv.ParseFloat(pipeMatches[3], 64)
+				adelay, err := strconv.ParseFloat(pipeMatches[3], 64)
+				if err != nil {
+					log.Printf("Couldn't convert PIPE adelay: %v", err)
+				}
 				e.pipeDelays.WithLabelValues(pipeMatches[1], "queue_manager").Observe(adelay)
-				sdelay, _ := strconv.ParseFloat(pipeMatches[4], 64)
+				sdelay, err := strconv.ParseFloat(pipeMatches[4], 64)
+				if err != nil {
+					log.Printf("Couldn't convert PIPE sdelay: %v", err)
+				}
 				e.pipeDelays.WithLabelValues(pipeMatches[1], "connection_setup").Observe(sdelay)
-				xdelay, _ := strconv.ParseFloat(pipeMatches[5], 64)
+				xdelay, err := strconv.ParseFloat(pipeMatches[5], 64)
+				if err != nil {
+					log.Printf("Couldn't convert PIPE xdelay: %v", err)
+				}
 				e.pipeDelays.WithLabelValues(pipeMatches[1], "transmission").Observe(xdelay)
 			} else {
 				e.unsupportedLogEntries.WithLabelValues(logMatches[1]).Inc()
 			}
 		} else if logMatches[1] == "qmgr" {
 			if qmgrInsertMatches := qmgrInsertLine.FindStringSubmatch(logMatches[2]); qmgrInsertMatches != nil {
-				size, _ := strconv.ParseFloat(qmgrInsertMatches[1], 64)
+				size, err := strconv.ParseFloat(qmgrInsertMatches[1], 64)
+				if err != nil {
+					log.Printf("Couldn't convert QMGR size: %v", err)
+				}
 				e.qmgrInsertsSize.Observe(size)
-				nrcpt, _ := strconv.ParseFloat(qmgrInsertMatches[2], 64)
+				nrcpt, err := strconv.ParseFloat(qmgrInsertMatches[2], 64)
+				if err != nil {
+					log.Printf("Couldn't convert QMGR nrcpt: %v", err)
+				}
 				e.qmgrInsertsNrcpt.Observe(nrcpt)
 			} else if strings.HasSuffix(logMatches[2], ": removed") {
 				e.qmgrRemoves.Inc()
@@ -331,13 +368,25 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 			}
 		} else if logMatches[1] == "smtp" {
 			if smtpMatches := lmtpPipeSMTPLine.FindStringSubmatch(logMatches[2]); smtpMatches != nil {
-				pdelay, _ := strconv.ParseFloat(smtpMatches[2], 64)
+				pdelay, err := strconv.ParseFloat(smtpMatches[2], 64)
+				if err != nil {
+					log.Printf("Couldn't convert SMTP pdelay: %v", err)
+				}
 				e.smtpDelays.WithLabelValues("before_queue_manager").Observe(pdelay)
-				adelay, _ := strconv.ParseFloat(smtpMatches[3], 64)
+				adelay, err := strconv.ParseFloat(smtpMatches[3], 64)
+				if err != nil {
+					log.Printf("Couldn't convert SMTP adelay: %v", err)
+				}
 				e.smtpDelays.WithLabelValues("queue_manager").Observe(adelay)
-				sdelay, _ := strconv.ParseFloat(smtpMatches[4], 64)
+				sdelay, err := strconv.ParseFloat(smtpMatches[4], 64)
+				if err != nil {
+					log.Printf("Couldn't convert SMTP sdelay: %v", err)
+				}
 				e.smtpDelays.WithLabelValues("connection_setup").Observe(sdelay)
-				xdelay, _ := strconv.ParseFloat(smtpMatches[5], 64)
+				xdelay, err := strconv.ParseFloat(smtpMatches[5], 64)
+				if err != nil {
+					log.Printf("Couldn't convert SMTP xdelay: %v", err)
+				}
 				e.smtpDelays.WithLabelValues("transmission").Observe(xdelay)
 			} else if smtpTLSMatches := smtpTLSLine.FindStringSubmatch(logMatches[2]); smtpTLSMatches != nil {
 				e.smtpTLSConnects.WithLabelValues(smtpTLSMatches[1:]...).Inc()
@@ -610,16 +659,17 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 
 func main() {
 	var (
-		listenAddress      = flag.String("web.listen-address", ":9154", "Address to listen on for web interface and telemetry.")
-		metricsPath        = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
-		postfixShowqPath   = flag.String("postfix.showq_path", "/var/spool/postfix/public/showq", "Path at which Postfix places its showq socket.")
-		postfixLogfilePath = flag.String("postfix.logfile_path", "/var/log/postfix_exporter_input.log", "Path where Postfix writes log entries.")
-
+		app                                           = kingpin.New("postfix_exporter", "Prometheus metrics exporter for postfix")
+		listenAddress                                 = app.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9154").String()
+		metricsPath                                   = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+		postfixShowqPath                              = app.Flag("postfix.showq_path", "Path at which Postfix places its showq socket.").Default("/var/spool/postfix/public/showq").String()
+		postfixLogfilePath                            = app.Flag("postfix.logfile_path", "Path where Postfix writes log entries. This file will be truncated by this exporter.").Default("/var/log/postfix_exporter_input.log").String()
 		systemdEnable                                 bool
 		systemdUnit, systemdSlice, systemdJournalPath string
 	)
-	systemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath)
-	flag.Parse()
+	systemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath, app)
+
+	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	var journal *Journal
 	if systemdEnable {
@@ -643,7 +693,7 @@ func main() {
 
 	http.Handle(*metricsPath, prometheus.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`
+		_, err = w.Write([]byte(`
 			<html>
 			<head><title>Postfix Exporter</title></head>
 			<body>
@@ -651,6 +701,9 @@ func main() {
 			<p><a href='` + *metricsPath + `'>Metrics</a></p>
 			</body>
 			</html>`))
+		if err != nil {
+			panic(err)
+		}
 	})
 
 	log.Print("Listening on ", *listenAddress)
