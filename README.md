@@ -15,16 +15,9 @@ command line flags.
 
 ## Events from log file
 
-The log file is truncated when
-processed, so that the next iteration doesn't interpret the same lines
-twice. It makes sense to configure your syslogger to multiplex log
-entries to a second file:
-
-```
-mail.* -/var/log/postfix_exporter_input.log
-```
-
-The path to the log file is specified with the `-postfix.logfile_path` flag.
+The log file is tailed when processed. Rotating the log files while the exporter
+is running is OK. The path to the log file is specified with the
+`-postfix.logfile_path` flag.
 
 ## Events from systemd
 
