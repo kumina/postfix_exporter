@@ -17,8 +17,8 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"flag"
 	"fmt"
+	"github.com/alecthomas/kingpin"
 	"io"
 	"log"
 	"net"
@@ -238,11 +238,11 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 			sizeHistogram.WithLabelValues(queue).Observe(size)
 		} else if key == "time" {
 			// Message time as a UNIX timestamp.
-			time, err := strconv.ParseFloat(value, 64)
+			utime, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return err
 			}
-			ageHistogram.WithLabelValues(queue).Observe(now - time)
+			ageHistogram.WithLabelValues(queue).Observe(now - utime)
 		}
 	}
 
@@ -663,16 +663,17 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 
 func main() {
 	var (
-		listenAddress      = flag.String("web.listen-address", ":9154", "Address to listen on for web interface and telemetry.")
-		metricsPath        = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
-		postfixShowqPath   = flag.String("postfix.showq_path", "/var/spool/postfix/public/showq", "Path at which Postfix places its showq socket.")
-		postfixLogfilePath = flag.String("postfix.logfile_path", "/var/log/postfix_exporter_input.log", "Path where Postfix writes log entries. This file will be truncated by this exporter.")
-
+		app                                           = kingpin.New("postfix_exporter", "Prometheus metrics exporter for postfix")
+		listenAddress                                 = app.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9154").String()
+		metricsPath                                   = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+		postfixShowqPath                              = app.Flag("postfix.showq_path", "Path at which Postfix places its showq socket.").Default("/var/spool/postfix/public/showq").String()
+		postfixLogfilePath                            = app.Flag("postfix.logfile_path", "Path where Postfix writes log entries. This file will be truncated by this exporter.").Default("/var/log/postfix_exporter_input.log").String()
 		systemdEnable                                 bool
 		systemdUnit, systemdSlice, systemdJournalPath string
 	)
-	systemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath)
-	flag.Parse()
+	systemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath, app)
+
+	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	var journal *Journal
 	if systemdEnable {
