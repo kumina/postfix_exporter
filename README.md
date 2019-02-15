@@ -17,14 +17,14 @@ command line flags.
 
 The log file is tailed when processed. Rotating the log files while the exporter
 is running is OK. The path to the log file is specified with the
-`-postfix.logfile_path` flag.
+`--postfix.logfile_path` flag.
 
 ## Events from systemd
 
-Retrieval from the systemd journal is enabled with the `-systemd.enable` flag.
+Retrieval from the systemd journal is enabled with the `--systemd.enable` flag.
 This overrides the log file setting.
-It is possible to specify the unit (with `-systemd.unit`) or slice (with `-systemd.slice`).
-Additionally, it is possible to read the journal from a directory with the `-systemd.journal_path` flag.
+It is possible to specify the unit (with `--systemd.unit`) or slice (with `--systemd.slice`).
+Additionally, it is possible to read the journal from a directory with the `--systemd.journal_path` flag.
 
 ## Build options
 
