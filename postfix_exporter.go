@@ -50,6 +50,7 @@ type PostfixExporter struct {
 	// Metrics that should persist after refreshes, based on logs.
 	cleanupProcesses                prometheus.Counter
 	cleanupRejects                  prometheus.Counter
+	cleanupNotAccepted              prometheus.Counter
 	lmtpDelays                      *prometheus.HistogramVec
 	pipeDelays                      *prometheus.HistogramVec
 	qmgrInsertsNrcpt                prometheus.Histogram
@@ -57,6 +58,7 @@ type PostfixExporter struct {
 	qmgrRemoves                     prometheus.Counter
 	smtpDelays                      *prometheus.HistogramVec
 	smtpTLSConnects                 *prometheus.CounterVec
+	smtpDeferreds                   prometheus.Counter
 	smtpdConnects                   prometheus.Counter
 	smtpdDisconnects                prometheus.Counter
 	smtpdFCrDNSErrors               prometheus.Counter
@@ -278,6 +280,7 @@ var (
 	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
 	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
 	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)$`)
+	smtpDeferredsLine                   = regexp.MustCompile(`status=deferred`)
 	smtpdFCrDNSErrorsLine               = regexp.MustCompile(`^warning: hostname \S+ does not resolve to address `)
 	smtpdProcessesSASLLine              = regexp.MustCompile(`: client=.*, sasl_username=(\S+)`)
 	smtpdRejectsLine                    = regexp.MustCompile(`^NOQUEUE: reject: RCPT from \S+: ([0-9]+) `)
@@ -296,6 +299,8 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 				e.cleanupProcesses.Inc()
 			} else if strings.Contains(logMatches[2], ": reject: ") {
 				e.cleanupRejects.Inc()
+			} else if strings.Contains(logMatches[2], "message not accepted") {
+				e.cleanupNotAccepted.Inc()
 			} else {
 				e.unsupportedLogEntries.WithLabelValues(logMatches[1]).Inc()
 			}
@@ -388,6 +393,10 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 					log.Printf("Couldn't convert SMTP xdelay: %v", err)
 				}
 				e.smtpDelays.WithLabelValues("transmission").Observe(xdelay)
+				if smtpDeferredsMatches := smtpDeferredsLine.FindStringSubmatch(
+					logMatches[2]); smtpDeferredsMatches != nil {
+					e.smtpDeferreds.Inc()
+				}
 			} else if smtpTLSMatches := smtpTLSLine.FindStringSubmatch(logMatches[2]); smtpTLSMatches != nil {
 				e.smtpTLSConnects.WithLabelValues(smtpTLSMatches[1:]...).Inc()
 			} else {
@@ -466,6 +475,11 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal) 
 			Name:      "cleanup_messages_rejected_total",
 			Help:      "Total number of messages rejected by cleanup.",
 		}),
+		cleanupNotAccepted: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "postfix",
+			Name:      "cleanup_messages_not_accepted_total",
+			Help:      "Total number of messages not accepted by cleanup.",
+		}),
 		lmtpDelays: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Namespace: "postfix",
@@ -514,6 +528,11 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal) 
 				Help:      "Total number of outgoing TLS connections.",
 			},
 			[]string{"trust", "protocol", "cipher", "secret_bits", "algorithm_bits"}),
+		smtpDeferreds: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "postfix",
+			Name:      "smtp_deferred_messages_total",
+			Help:      "Total number of messages that have been deferred on SMTP.",
+		}),
 		smtpdConnects: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "postfix",
 			Name:      "smtpd_connects_total",
@@ -578,6 +597,7 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 
 	ch <- e.cleanupProcesses.Desc()
 	ch <- e.cleanupRejects.Desc()
+	ch <- e.cleanupNotAccepted.Desc()
 	e.lmtpDelays.Describe(ch)
 	e.pipeDelays.Describe(ch)
 	ch <- e.qmgrInsertsNrcpt.Desc()
@@ -585,6 +605,7 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.qmgrRemoves.Desc()
 	e.smtpDelays.Describe(ch)
 	e.smtpTLSConnects.Describe(ch)
+	ch <- e.smtpDeferreds.Desc()
 	ch <- e.smtpdConnects.Desc()
 	ch <- e.smtpdDisconnects.Desc()
 	ch <- e.smtpdFCrDNSErrors.Desc()
@@ -639,6 +660,7 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 
 	ch <- e.cleanupProcesses
 	ch <- e.cleanupRejects
+	ch <- e.cleanupNotAccepted
 	e.lmtpDelays.Collect(ch)
 	e.pipeDelays.Collect(ch)
 	ch <- e.qmgrInsertsNrcpt
@@ -646,6 +668,7 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 	ch <- e.qmgrRemoves
 	e.smtpDelays.Collect(ch)
 	e.smtpTLSConnects.Collect(ch)
+	ch <- e.smtpDeferreds
 	ch <- e.smtpdConnects
 	ch <- e.smtpdDisconnects
 	ch <- e.smtpdFCrDNSErrors
