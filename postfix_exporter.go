@@ -66,7 +66,7 @@ type PostfixExporter struct {
 	smtpdSASLAuthenticationFailures prometheus.Counter
 	smtpdTLSConnects                *prometheus.CounterVec
 	unsupportedLogEntries           *prometheus.CounterVec
-	errorStatusDeferred             prometheus.Counter
+	smtpStatusDeferred              prometheus.Counter
 }
 
 // CollectShowqFromReader parses the output of Postfix's 'showq' command
@@ -278,6 +278,7 @@ var (
 	logLine                             = regexp.MustCompile(` ?postfix/(\w+)\[\d+\]: (.*)`)
 	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
 	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
+	smtpStatusDeferredLine              = regexp.MustCompile(`, status=deferred`)
 	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)$`)
 	smtpdFCrDNSErrorsLine               = regexp.MustCompile(`^warning: hostname \S+ does not resolve to address `)
 	smtpdProcessesSASLLine              = regexp.MustCompile(`: client=.*, sasl_username=(\S+)`)
@@ -285,7 +286,6 @@ var (
 	smtpdLostConnectionLine             = regexp.MustCompile(`^lost connection after (\w+) from `)
 	smtpdSASLAuthenticationFailuresLine = regexp.MustCompile(`^warning: \S+: SASL \S+ authentication failed: `)
 	smtpdTLSLine                        = regexp.MustCompile(`^(\S+) TLS connection established from \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)$`)
-	errorStatusDeferredLine             = regexp.MustCompile(`, status=deferred`)
 )
 
 // CollectFromLogline collects metrict from a Postfix log line.
@@ -390,6 +390,10 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 					log.Printf("Couldn't convert SMTP xdelay: %v", err)
 				}
 				e.smtpDelays.WithLabelValues("transmission").Observe(xdelay)
+
+				if smtpMatches := smtpStatusDeferredLine.FindStringSubmatch(logMatches[2]) ; smtpMatches != nil {
+					e.smtpStatusDeferred.Inc()
+				}
 			} else if smtpTLSMatches := smtpTLSLine.FindStringSubmatch(logMatches[2]); smtpTLSMatches != nil {
 				e.smtpTLSConnects.WithLabelValues(smtpTLSMatches[1:]...).Inc()
 			} else {
@@ -416,10 +420,6 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 				e.smtpdTLSConnects.WithLabelValues(smtpdTLSMatches[1:]...).Inc()
 			} else {
 				e.unsupportedLogEntries.WithLabelValues(logMatches[1]).Inc()
-			}
-		} else if logMatches[1] == "error" {
-			if errorMatches := errorStatusDeferredLine.FindStringSubmatch(logMatches[2]) ; errorMatches != nil {
-				e.errorStatusDeferred.Inc()
 			}
 		} else {
 			// Unknown Postfix service.
@@ -575,9 +575,9 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal) 
 				Help:      "Log entries that could not be processed.",
 			},
 			[]string{"service"}),
-		errorStatusDeferred: prometheus.NewCounter(prometheus.CounterOpts{
+		smtpStatusDeferred: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "postfix",
-			Name:      "error_status_deferred",
+			Name:      "smtp_status_deferred",
 			Help:      "Total number of messages deferred.",
 		}),
 
@@ -605,7 +605,7 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	e.smtpdRejects.Describe(ch)
 	ch <- e.smtpdSASLAuthenticationFailures.Desc()
 	e.smtpdTLSConnects.Describe(ch)
-	ch <- e.errorStatusDeferred.Desc()
+	ch <- e.smtpStatusDeferred.Desc()
 	e.unsupportedLogEntries.Describe(ch)
 }
 
@@ -667,7 +667,7 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 	e.smtpdRejects.Collect(ch)
 	ch <- e.smtpdSASLAuthenticationFailures
 	e.smtpdTLSConnects.Collect(ch)
-	ch <- e.errorStatusDeferred
+	ch <- e.smtpStatusDeferred
 	e.unsupportedLogEntries.Collect(ch)
 }
 
