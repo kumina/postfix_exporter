@@ -66,6 +66,7 @@ type PostfixExporter struct {
 	smtpdSASLAuthenticationFailures prometheus.Counter
 	smtpdTLSConnects                *prometheus.CounterVec
 	unsupportedLogEntries           *prometheus.CounterVec
+	errorStatusDeferred             prometheus.Counter
 }
 
 // CollectShowqFromReader parses the output of Postfix's 'showq' command
@@ -284,6 +285,7 @@ var (
 	smtpdLostConnectionLine             = regexp.MustCompile(`^lost connection after (\w+) from `)
 	smtpdSASLAuthenticationFailuresLine = regexp.MustCompile(`^warning: \S+: SASL \S+ authentication failed: `)
 	smtpdTLSLine                        = regexp.MustCompile(`^(\S+) TLS connection established from \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)$`)
+	errorStatusDeferred                 = regexp.MustCompile(`, status=deferred`)
 )
 
 // CollectFromLogline collects metrict from a Postfix log line.
@@ -414,6 +416,10 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 				e.smtpdTLSConnects.WithLabelValues(smtpdTLSMatches[1:]...).Inc()
 			} else {
 				e.unsupportedLogEntries.WithLabelValues(logMatches[1]).Inc()
+			}
+		} else if logMatches[1] == "error" {
+			if errorMatches := errorStatusDeferred.FindStringSubmatch(logMatches[2]) ; errorMatches != nil {
+				e.errorStatusDeferred.Inc()
 			}
 		} else {
 			// Unknown Postfix service.
@@ -569,6 +575,12 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal) 
 				Help:      "Log entries that could not be processed.",
 			},
 			[]string{"service"}),
+		errorStatusDeferred: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "postfix",
+			Name:      "error_status_deferred",
+			Help:      "Total number of messages deferred.",
+		}),
+
 	}, nil
 }
 
@@ -593,6 +605,7 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	e.smtpdRejects.Describe(ch)
 	ch <- e.smtpdSASLAuthenticationFailures.Desc()
 	e.smtpdTLSConnects.Describe(ch)
+	ch <- e.errorStatusDeferred.Desc()
 	e.unsupportedLogEntries.Describe(ch)
 }
 
@@ -654,6 +667,7 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 	e.smtpdRejects.Collect(ch)
 	ch <- e.smtpdSASLAuthenticationFailures
 	e.smtpdTLSConnects.Collect(ch)
+	ch <- e.errorStatusDeferred
 	e.unsupportedLogEntries.Collect(ch)
 }
 
