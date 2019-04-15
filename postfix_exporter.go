@@ -285,7 +285,7 @@ var (
 	smtpdLostConnectionLine             = regexp.MustCompile(`^lost connection after (\w+) from `)
 	smtpdSASLAuthenticationFailuresLine = regexp.MustCompile(`^warning: \S+: SASL \S+ authentication failed: `)
 	smtpdTLSLine                        = regexp.MustCompile(`^(\S+) TLS connection established from \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)$`)
-	errorStatusDeferred                 = regexp.MustCompile(`, status=deferred`)
+	errorStatusDeferredLine             = regexp.MustCompile(`, status=deferred`)
 )
 
 // CollectFromLogline collects metrict from a Postfix log line.
@@ -418,7 +418,7 @@ func (e *PostfixExporter) CollectFromLogline(line string) {
 				e.unsupportedLogEntries.WithLabelValues(logMatches[1]).Inc()
 			}
 		} else if logMatches[1] == "error" {
-			if errorMatches := errorStatusDeferred.FindStringSubmatch(logMatches[2]) ; errorMatches != nil {
+			if errorMatches := errorStatusDeferredLine.FindStringSubmatch(logMatches[2]) ; errorMatches != nil {
 				e.errorStatusDeferred.Inc()
 			}
 		} else {
