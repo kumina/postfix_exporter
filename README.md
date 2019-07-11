@@ -1,7 +1,8 @@
 # Prometheus Postfix exporter
+[![CircleCI](https://circleci.com/gh/toliger/postfix_exporter.svg?style=svg)](https://circleci.com/gh/toliger/postfix_exporter)
 [![Go Report Card](https://goreportcard.com/badge/github.com/toliger/postfix_exporter)](https://goreportcard.com/report/github.com/toliger/postfix_exporter)
 [![GoDoc](https://godoc.org/github.com/toliger/postfix_exporter?status.svg)](https://godoc.org/github.com/toliger/postfix_exporter)
-[![Docker Pulls](https://img.shields.io/docker/pulls/toliger/postfix_exporter.svg?maxAge=604800)](https://hub.docker.com/r/toliger/postfix_exporter/)
+[![Docker Pulls](https://img.shields.io/docker/pulls/oligertimothee/postfix_exporter.svg?maxAge=604800)](https://hub.docker.com/r/oligertimothee/postfix_exporter/)
 
 This repository provides code for a Prometheus metrics exporter
 for [the Postfix mail server](http://www.postfix.org/). This exporter

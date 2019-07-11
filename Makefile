@@ -8,3 +8,6 @@ build:
 clean:
 	[ -f "postfix_exporter" ] && rm postfix_exporter
 
+test:
+	go test
+
