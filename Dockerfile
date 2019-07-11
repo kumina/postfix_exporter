@@ -8,13 +8,15 @@ WORKDIR /go/src/app
 
 COPY . .
 
-RUN go build -o /go/bin/exporter
+RUN go build -o /bin/postfix_exporter
 
 
-FROM scratch
+FROM debian:latest
 
-COPY --from=build-env /go/bin/exporter /go/bin/
+COPY --from=build-env /bin/postfix_exporter /bin/postfix_exporter
 
-WORKDIR /go/bin
+WORKDIR /
 
-ENTRYPOINT ["/go/bin/exporter"]
+EXPOSE 9154/tcp
+
+ENTRYPOINT ["/bin/postfix_exporter"]
