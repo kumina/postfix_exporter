@@ -30,12 +30,10 @@ This overrides the log file setting.
 It is possible to specify the unit (with `--systemd.unit`) or slice (with `--systemd.slice`).
 Additionally, it is possible to read the journal from a directory with the `--systemd.journal_path` flag.
 
-## Build options
+## Build
 
-Default the exporter is build with systemd journal functionality (but it is disabled at default).
-Because the systemd headers are required for building with systemd, there is
-an option to build the exporter without systemd. Use the build tag `nosystemd`.
+You can easily build the app with:
 
 ```
-go build -tags nosystemd
+make build
 ```
