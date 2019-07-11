@@ -1,4 +1,7 @@
 # Prometheus Postfix exporter
+[![Go Report
+Card](https://goreportcard.com/badge/github.com/toliger/postfix_exporter)](https://goreportcard.com/report/github.com/toliger/postfix_exporter)
+
 
 This repository provides code for a Prometheus metrics exporter
 for [the Postfix mail server](http://www.postfix.org/). This exporter
