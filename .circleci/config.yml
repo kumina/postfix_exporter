@@ -14,18 +14,6 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libsystemd-dev
       - run: make test
   
-  cross_build:
-    machine: true
-    working_directory: /home/circleci/.go_workspace/src/github.com/toliger/postfix_exporter
-    environment:
-      GOBIN: "/home/circleci/.go_workspace/go/bin"
-    steps:
-    - checkout
-    - run: sudo apt-get update && sudo apt-get install -y libsystemd-daemon-devd
-    - persist_to_workspace:
-        root: .
-        paths:
-        - .build
 
   publish_master:
     docker:
@@ -37,17 +25,16 @@ jobs:
       - checkout
       - setup_remote_docker:
           version: 17.07.0-ce
-      - attach_workspace:
-          at: .
-      - run: ln -s .build/linux-amd64/postfix_exporter postfix_exporter
       - run: make build
+      - run: mkdir .build && mv postfix_exporter .build/
+      - store_artifacts:
+          path: .build
       - run: docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}"
       - run: docker tag postfix_exporter oligertimothee/postfix_exporter:master
       - run: docker push oligertimothee/postfix_exporter:master
 
   publish_release:
     docker:
-      # Available from https://hub.docker.com/r/circleci/golang/
       - image: circleci/golang:1.12.5
     working_directory: /go/src/github.com/toliger/postfix_exporter
     environment:
@@ -56,15 +43,10 @@ jobs:
       - checkout
       - setup_remote_docker:
           version: 17.07.0-ce
-      - attach_workspace:
-          at: .
-      - run: make tarballs-release
+      - run: make build
+      - run: mkdir .build && mv postfix_exporter .build/
       - store_artifacts:
-          path: .tarballs
-          destination: releases
-      - run: ln -s .build/linux-amd64/postfix_exporter postfix_exporter
-      - run: make docker
-      - run: docker run postfix_exporter --help
+          path: .build
       - run: docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}"
       - run: docker tag postfix_exporter oligertimothee/postfix_exporter:latest
       - run: docker push oligertimothee/postfix_exporter:latest
