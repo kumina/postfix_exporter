@@ -1,14 +1,20 @@
-FROM golang:1.8
-ADD . /go/src/github.com/kumina/postfix_exporter
-WORKDIR /go/src/github.com/kumina/postfix_exporter
-RUN apt-get update -qq && apt-get install -qqy \
-  build-essential \
-  libsystemd-dev
-RUN go get -v ./...
-RUN go build
+FROM golang:latest AS build-env
 
-FROM debian:latest
-EXPOSE 9154
-WORKDIR /
-COPY --from=0 /go/src/github.com/kumina/postfix_exporter/postfix_exporter .
-ENTRYPOINT ["/postfix_exporter"]
+ENV GO111MODULE=on
+
+RUN apt-get update && apt-get install -y libsystemd-dev
+
+WORKDIR /go/src/app
+
+COPY . .
+
+RUN go build -o /go/bin/exporter
+
+
+FROM scratch
+
+COPY --from=build-env /go/bin/exporter /go/bin/
+
+WORKDIR /go/bin
+
+ENTRYPOINT ["/go/bin/exporter"]
