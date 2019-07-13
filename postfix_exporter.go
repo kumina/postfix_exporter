@@ -664,7 +664,7 @@ func main() {
 		listenAddress                                 = app.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9154").String()
 		metricsPath                                   = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
 		postfixShowqPath                              = app.Flag("postfix.showq_path", "Path at which Postfix places its showq socket.").Default("/var/spool/postfix/public/showq").String()
-		postfixLogfilePath                            = app.Flag("postfix.logfile_path", "Path where Postfix writes log entries. This file will be truncated by this exporter.").Default("/var/log/postfix_exporter_input.log").String()
+		postfixLogfilePath                            = app.Flag("postfix.logfile_path", "Path where Postfix writes log entries. This file will be truncated by this exporter.").Default("/var/log/mail.log").String()
 		systemdEnable                                 bool
 		systemdUnit, systemdSlice, systemdJournalPath string
 	)
@@ -675,7 +675,7 @@ func main() {
 	var journal *Journal
 	if systemdEnable {
 		var err error
-		journal, err = NewJournal(systemdUnit, systemdSlice, systemdJournalPath)
+		journal, err = NewJournal(systemdUnit, systemdSlice, "")
 		if err != nil {
 			log.Fatalf("Error opening systemd journal: %s", err)
 		}
