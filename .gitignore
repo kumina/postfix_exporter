@@ -1,9 +1,12 @@
 # Editor files
 *~
--.idea/
+.idea/
 
 # Test binary, build with `go test -c`
 *.test
 
 # Binaries
 postfix_exporter
+
+*.iml
+vendor/
