@@ -703,6 +703,9 @@ func main() {
 			log.Fatalf("Error opening systemd journal: %s", err)
 		}
 		defer journal.Close()
+		log.Println("Reading log events from systemd")
+	} else {
+		log.Printf("Reading log events from %v", *postfixLogfilePath)
 	}
 
 	exporter, err := NewPostfixExporter(
