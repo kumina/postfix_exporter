@@ -1,5 +1,5 @@
 # Builder stage to
-FROM golang:1.12 as builder
+FROM golang:1.13 as builder
 
 # Add the project in the image
 ADD . /go/src/github.com/kumina/postfix_exporter
@@ -11,7 +11,7 @@ RUN apt-get update -q && apt-get install -qy \
   libsystemd-dev
 
 # Get dependencies and build the static binary
-RUN go get -d ./...
+RUN go test
 RUN go build -a -tags static_all
 
 # Real image

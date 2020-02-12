@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin"
-	"github.com/coreos/go-systemd/sdjournal"
+	"github.com/coreos/go-systemd/v22/sdjournal"
 )
 
 // Journal represents a lockable systemd journal.
