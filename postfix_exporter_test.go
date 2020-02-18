@@ -122,7 +122,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			counter := testCounter{}
 			e.qmgrRemoves = &counter
 			for _, line := range tt.args.line {
-				e.CollectFromLogline(line)
+				e.CollectFromLogLine(line)
 			}
 			assert.Equal(t, tt.args.count, counter.Count(), "Wrong number of lines counted")
 			if counter.Count() != tt.args.count {
