@@ -112,7 +112,7 @@ func (e *PostfixExporter) CollectLogfileFromJournal() error {
 		if c == 0 {
 			break
 		}
-		e.CollectFromLogline(m)
+		e.CollectFromLogLine(m)
 	}
 
 	return nil
