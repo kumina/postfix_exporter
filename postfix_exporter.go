@@ -471,10 +471,13 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 				if e.logUnsupportedLines {
 					log.Printf("Unsupported Line: %v", line)
 				}
-				e.unsupportedLogEntries.WithLabelValues(subprocess).Inc()
+				e.unsupportedLogEntries.WithLabelValues(process).Inc()
 			}
 		default:
-
+			if e.logUnsupportedLines {
+				log.Printf("Unsupported Line: %v", line)
+			}
+			e.unsupportedLogEntries.WithLabelValues(process).Inc()
 		}
 	} else {
 		// Unknown log entry format.
