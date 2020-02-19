@@ -258,16 +258,6 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 	return scanner.Err()
 }
 
-// CollectShowqFromFile collects Postfix queue statistics from a file.
-//func CollectShowqFromFile(path string, ch chan<- prometheus.Metric) error {
-//	fd, err := os.Open(path)
-//	if err != nil {
-//		return err
-//	}
-//	defer fd.Close()
-//	return CollectShowqFromReader(fd, ch)
-//}
-
 // CollectShowqFromSocket collects Postfix queue statistics from a socket.
 func CollectShowqFromSocket(path string, ch chan<- prometheus.Metric) error {
 	fd, err := net.Dial("unix", path)
@@ -302,15 +292,15 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 
 	if logMatches == nil {
 		// Unknown log entry format.
-		e.unsupportedLogEntries.WithLabelValues("").Inc()
+		e.addToUnsupportedLine(line, "")
 		return
 	}
 	process := logMatches[1]
-	subprocess := logMatches[3]
 	remainder := logMatches[4]
 	switch process {
 	case "postfix":
 		// Group patterns to check by Postfix service.
+		subprocess := logMatches[3]
 		switch subprocess {
 		case "cleanup":
 			if strings.Contains(remainder, ": message-id=<") {
@@ -318,10 +308,7 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 			} else if strings.Contains(remainder, ": reject: ") {
 				e.cleanupRejects.Inc()
 			} else {
-				if e.logUnsupportedLines {
-					log.Printf("Unsupported Line: %v", line)
-				}
-				e.unsupportedLogEntries.WithLabelValues(subprocess).Inc()
+				e.addToUnsupportedLine(line, subprocess)
 			}
 		case "lmtp":
 			if lmtpMatches := lmtpPipeSMTPLine.FindStringSubmatch(remainder); lmtpMatches != nil {
@@ -330,10 +317,7 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 				addToHistogramVec(e.lmtpDelays, lmtpMatches[4], "LMTP sdelay", "connection_setup")
 				addToHistogramVec(e.lmtpDelays, lmtpMatches[5], "LMTP xdelay", "transmission")
 			} else {
-				if e.logUnsupportedLines {
-					log.Printf("Unsupported Line: %v", line)
-				}
-				e.unsupportedLogEntries.WithLabelValues(subprocess).Inc()
+				e.addToUnsupportedLine(line, subprocess)
 			}
 		case "pipe":
 			if pipeMatches := lmtpPipeSMTPLine.FindStringSubmatch(remainder); pipeMatches != nil {
@@ -342,10 +326,7 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 				addToHistogramVec(e.pipeDelays, pipeMatches[4], "PIPE sdelay", pipeMatches[1], "connection_setup")
 				addToHistogramVec(e.pipeDelays, pipeMatches[5], "PIPE xdelay", pipeMatches[1], "transmission")
 			} else {
-				if e.logUnsupportedLines {
-					log.Printf("Unsupported Line: %v", line)
-				}
-				e.unsupportedLogEntries.WithLabelValues(subprocess).Inc()
+				e.addToUnsupportedLine(line, subprocess)
 			}
 		case "qmgr":
 			if qmgrInsertMatches := qmgrInsertLine.FindStringSubmatch(remainder); qmgrInsertMatches != nil {
@@ -354,10 +335,7 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 			} else if strings.HasSuffix(remainder, ": removed") {
 				e.qmgrRemoves.Inc()
 			} else {
-				if e.logUnsupportedLines {
-					log.Printf("Unsupported Line: %v", line)
-				}
-				e.unsupportedLogEntries.WithLabelValues(subprocess).Inc()
+				e.addToUnsupportedLine(line, subprocess)
 			}
 		case "smtp":
 			if smtpMatches := lmtpPipeSMTPLine.FindStringSubmatch(remainder); smtpMatches != nil {
@@ -365,13 +343,15 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 				addToHistogramVec(e.smtpDelays, smtpMatches[3], "queue_manager")
 				addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup")
 				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission")
+				if smtpMatches := smtpStatusDeferredLine.FindStringSubmatch(remainder); smtpMatches != nil {
+					e.smtpStatusDeferred.Inc()
+				}
 			} else if smtpTLSMatches := smtpTLSLine.FindStringSubmatch(remainder); smtpTLSMatches != nil {
 				e.smtpTLSConnects.WithLabelValues(smtpTLSMatches[1:]...).Inc()
+			} else if smtpMatches := smtpConnectionTimedOut.FindStringSubmatch(remainder); smtpMatches != nil {
+				e.smtpConnectionTimedOut.Inc()
 			} else {
-				if e.logUnsupportedLines {
-					log.Printf("Unsupported Line: %v", line)
-				}
-				e.unsupportedLogEntries.WithLabelValues(subprocess).Inc()
+				e.addToUnsupportedLine(line, subprocess)
 			}
 		case "smtpd":
 			if strings.HasPrefix(remainder, "connect from ") {
@@ -393,35 +373,30 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 			} else if smtpdTLSMatches := smtpdTLSLine.FindStringSubmatch(remainder); smtpdTLSMatches != nil {
 				e.smtpdTLSConnects.WithLabelValues(smtpdTLSMatches[1:]...).Inc()
 			} else {
-				if e.logUnsupportedLines {
-					log.Printf("Unsupported Line: %v", line)
-				}
-				e.unsupportedLogEntries.WithLabelValues(subprocess).Inc()
+				e.addToUnsupportedLine(line, subprocess)
 			}
 		default:
-			if e.logUnsupportedLines {
-				log.Printf("Unsupported Line: %v", line)
-			}
-			// Unknown Postfix service.
-			e.unsupportedLogEntries.WithLabelValues(subprocess).Inc()
+			e.addToUnsupportedLine(line, subprocess)
 		}
 	case "opendkim":
 		if opendkimMatches := opendkimSignatureAdded.FindStringSubmatch(remainder); opendkimMatches != nil {
 			e.opendkimSignatureAdded.WithLabelValues(opendkimMatches[1], opendkimMatches[2]).Inc()
 		} else {
-			if e.logUnsupportedLines {
-				log.Printf("Unsupported Line: %v", line)
-			}
-			e.unsupportedLogEntries.WithLabelValues(process).Inc()
+			e.addToUnsupportedLine(line, process)
 		}
 	default:
 		// Unknown log entry format.
-		if e.logUnsupportedLines {
-			log.Printf("Unsupported Line: %v", line)
-		}
-		e.unsupportedLogEntries.WithLabelValues("").Inc()
+		e.addToUnsupportedLine(line, "")
 	}
 }
+
+func (e *PostfixExporter) addToUnsupportedLine(line string, subprocess string) {
+	if e.logUnsupportedLines {
+		log.Printf("Unsupported Line: %v", line)
+	}
+	e.unsupportedLogEntries.WithLabelValues(subprocess).Inc()
+}
+
 func addToHistogram(h prometheus.Histogram, value, fieldName string) {
 	float, err := strconv.ParseFloat(value, 64)
 	if err != nil {
@@ -734,64 +709,4 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 	e.unsupportedLogEntries.Collect(ch)
 	ch <- e.smtpConnectionTimedOut
 	e.opendkimSignatureAdded.Collect(ch)
-}
-
-func main() {
-	var (
-		app                                           = kingpin.New("postfix_exporter", "Prometheus metrics exporter for postfix")
-		listenAddress                                 = app.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9154").String()
-		metricsPath                                   = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
-		postfixShowqPath                              = app.Flag("postfix.showq_path", "Path at which Postfix places its showq socket.").Default("/var/spool/postfix/public/showq").String()
-		postfixLogfilePath                            = app.Flag("postfix.logfile_path", "Path where Postfix writes log entries. This file will be truncated by this exporter.").Default("/var/log/postfix_exporter_input.log").String()
-		logUnsupportedLines                           = app.Flag("log.unsupported", "Log all unsupported lines.").Bool()
-		systemdEnable                                 bool
-		systemdUnit, systemdSlice, systemdJournalPath string
-	)
-	systemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath, app)
-
-	kingpin.MustParse(app.Parse(os.Args[1:]))
-
-	var journal *Journal
-	if systemdEnable {
-		var err error
-		journal, err = NewJournal(systemdUnit, systemdSlice, systemdJournalPath)
-		if err != nil {
-			log.Fatalf("Error opening systemd journal: %s", err)
-		}
-		defer journal.Close()
-		log.Println("Reading log events from systemd")
-	} else {
-		log.Printf("Reading log events from %v", *postfixLogfilePath)
-	}
-
-	exporter, err := NewPostfixExporter(
-		*postfixShowqPath,
-		*postfixLogfilePath,
-		journal,
-		*logUnsupportedLines,
-	)
-	if err != nil {
-		log.Fatalf("Failed to create PostfixExporter: %s", err)
-	}
-	prometheus.MustRegister(exporter)
-
-	http.Handle(*metricsPath, promhttp.Handler())
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		_, err = w.Write([]byte(`
-			<html>
-			<head><title>Postfix Exporter</title></head>
-			<body>
-			<h1>Postfix Exporter</h1>
-			<p><a href='` + *metricsPath + `'>Metrics</a></p>
-			</body>
-			</html>`))
-		if err != nil {
-			panic(err)
-		}
-	})
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	defer cancelFunc()
-	go exporter.StartMetricCollection(ctx)
-	log.Print("Listening on ", *listenAddress)
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
 }

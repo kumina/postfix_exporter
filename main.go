@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
 	"net/http"
 	"os"
@@ -16,6 +18,7 @@ func main() {
 		metricsPath                                   = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
 		postfixShowqPath                              = app.Flag("postfix.showq_path", "Path at which Postfix places its showq socket.").Default("/var/spool/postfix/public/showq").String()
 		postfixLogfilePath                            = app.Flag("postfix.logfile_path", "Path where Postfix writes log entries. This file will be truncated by this exporter.").Default("/var/log/postfix_exporter_input.log").String()
+		logUnsupportedLines                           = app.Flag("log.unsupported", "Log all unsupported lines.").Bool()
 		systemdEnable                                 bool
 		systemdUnit, systemdSlice, systemdJournalPath string
 	)
@@ -31,19 +34,23 @@ func main() {
 			log.Fatalf("Error opening systemd journal: %s", err)
 		}
 		defer journal.Close()
+		log.Println("Reading log events from systemd")
+	} else {
+		log.Printf("Reading log events from %v", *postfixLogfilePath)
 	}
 
 	exporter, err := NewPostfixExporter(
 		*postfixShowqPath,
 		*postfixLogfilePath,
 		journal,
+		*logUnsupportedLines,
 	)
 	if err != nil {
 		log.Fatalf("Failed to create PostfixExporter: %s", err)
 	}
 	prometheus.MustRegister(exporter)
 
-	http.Handle(*metricsPath, prometheus.Handler())
+	http.Handle(*metricsPath, promhttp.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		_, err = w.Write([]byte(`
 			<html>
@@ -57,7 +64,9 @@ func main() {
 			panic(err)
 		}
 	})
-
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	go exporter.StartMetricCollection(ctx)
 	log.Print("Listening on ", *listenAddress)
 	log.Fatal(http.ListenAndServe(*listenAddress, nil))
 }
