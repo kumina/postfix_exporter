@@ -1,4 +1,4 @@
-// +build !nosystemd
+// +build !nosystemd,linux
 
 package main
 
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin"
-	"github.com/coreos/go-systemd/sdjournal"
+	"github.com/coreos/go-systemd/v22/sdjournal"
 )
 
 // Journal represents a lockable systemd journal.
@@ -112,7 +112,7 @@ func (e *PostfixExporter) CollectLogfileFromJournal() error {
 		if c == 0 {
 			break
 		}
-		e.CollectFromLogline(m)
+		e.CollectFromLogLine(m)
 	}
 
 	return nil

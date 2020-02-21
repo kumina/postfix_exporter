@@ -1,26 +1,24 @@
-# Builder stage to
-FROM golang:1.12 as builder
+FROM golang:1.13 AS builder
+WORKDIR /src
 
-# Add the project in the image
-ADD . /go/src/github.com/kumina/postfix_exporter
-WORKDIR /go/src/github.com/kumina/postfix_exporter
-
-# Install needed dependencies for the build
-RUN apt-get update -q && apt-get install -qy \
+# avoid downloading the dependencies on succesive builds
+RUN apt-get update -qq && apt-get install -qqy \
   build-essential \
   libsystemd-dev
 
-# Get dependencies and build the static binary
-RUN go get -d ./...
-RUN go build -a -tags static_all
+COPY go.mod go.sum ./
+RUN go mod download
+RUN go mod verify
 
-# Real image
+COPY . .
+
+# Force the go compiler to use modules
+ENV GO111MODULE=on
+RUN go test
+RUN go build -o /bin/postfix_exporter
+
 FROM debian:latest
-
 EXPOSE 9154
 WORKDIR /
-
-# Copy the binary from the build image to the real one
-COPY --from=builder /go/src/github.com/kumina/postfix_exporter/postfix_exporter .
-
-ENTRYPOINT ["/postfix_exporter"]
+COPY --from=builder /bin/postfix_exporter /bin/
+ENTRYPOINT ["/bin/postfix_exporter"]

@@ -1,14 +1,13 @@
-// +build nosystemd
+// +build nosystemd !linux
 // This file contains stubs to support non-systemd use
 
 package main
 
-import(
+import (
 	"io"
 
 	"github.com/alecthomas/kingpin"
 )
-
 
 type Journal struct {
 	io.Closer
