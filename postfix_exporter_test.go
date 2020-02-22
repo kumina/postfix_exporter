@@ -38,6 +38,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		line            []string
 		removedCount    int
 		saslFailedCount int
+		outgoingTLS     int
 	}
 	tests := []struct {
 		name   string
@@ -118,6 +119,22 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				unsupportedLogEntries:           prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
 			},
 		},
+		{
+			name: "Issue #35",
+			args: args{
+				line: []string{
+					"Jul 24 04:38:17 mail postfix/smtp[30582]: Verified TLS connection established to gmail-smtp-in.l.google.com[108.177.14.26]:25: TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits) key-exchange X25519 server-signature RSA-PSS (2048 bits) server-digest SHA256",
+					"Jul 24 03:28:15 mail postfix/smtp[24052]: Verified TLS connection established to mx2.comcast.net[2001:558:fe21:2a::6]:25: TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits)",
+				},
+				removedCount:    0,
+				saslFailedCount: 0,
+				outgoingTLS:     2,
+			},
+			fields: fields{
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+				smtpTLSConnects:       prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"Verified", "TLSv1.2", "ECDHE-RSA-AES256-GCM-SHA384", "256", "256"}),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -145,13 +162,38 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				smtpdSASLAuthenticationFailures: tt.fields.smtpdSASLAuthenticationFailures,
 				smtpdTLSConnects:                tt.fields.smtpdTLSConnects,
 				unsupportedLogEntries:           tt.fields.unsupportedLogEntries,
+				logUnsupportedLines:             true,
 			}
 			for _, line := range tt.args.line {
 				e.CollectFromLogLine(line)
 			}
 			assertCounterEquals(t, e.qmgrRemoves, tt.args.removedCount, "Wrong number of lines counted")
 			assertCounterEquals(t, e.smtpdSASLAuthenticationFailures, tt.args.saslFailedCount, "Wrong number of Sasl counter counted")
+			assertCounterVecEquals(t, e.smtpTLSConnects, tt.args.outgoingTLS, "Wrong number of TLS connections counted")
 		})
+	}
+}
+func assertCounterVecEquals(t *testing.T, counter prometheus.Collector, expected int, message string) {
+
+	if counter != nil && expected > 0 {
+		switch counter.(type) {
+		case *prometheus.CounterVec:
+			counter := counter.(*prometheus.CounterVec)
+			metricsChan := make(chan prometheus.Metric)
+			go func() {
+				counter.Collect(metricsChan)
+				close(metricsChan)
+			}()
+			var count int = 0
+			for metric := range metricsChan {
+				metricDto := io_prometheus_client.Metric{}
+				metric.Write(&metricDto)
+				count += int(*metricDto.Counter.Value)
+			}
+			assert.Equal(t, expected, count, message)
+		default:
+			t.Fatal("Type not implemented")
+		}
 	}
 }
 func assertCounterEquals(t *testing.T, counter prometheus.Counter, expected int, message string) {

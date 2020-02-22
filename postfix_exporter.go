@@ -274,7 +274,7 @@ var (
 	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
 	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
 	smtpStatusDeferredLine              = regexp.MustCompile(`, status=deferred`)
-	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)$`)
+	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)`)
 	smtpConnectionTimedOut              = regexp.MustCompile(`^connect\s+to\s+(.*)\[(.*)\]:(\d+):\s+(Connection timed out)$`)
 	smtpdFCrDNSErrorsLine               = regexp.MustCompile(`^warning: hostname \S+ does not resolve to address `)
 	smtpdProcessesSASLLine              = regexp.MustCompile(`: client=.*, sasl_username=(\S+)`)
@@ -441,9 +441,10 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal, 
 	if logfilePath != "" {
 		var err error
 		tailer, err = tail.TailFile(logfilePath, tail.Config{
-			ReOpen:    true, // reopen the file if it's rotated
-			MustExist: true, // fail immediately if the file is missing or has incorrect permissions
-			Follow:    true, // run in follow mode
+			ReOpen:    true,                               // reopen the file if it's rotated
+			MustExist: true,                               // fail immediately if the file is missing or has incorrect permissions
+			Follow:    true,                               // run in follow mode
+			Location:  &tail.SeekInfo{Whence: io.SeekEnd}, // seek to end of file
 		})
 		if err != nil {
 			return nil, err
