@@ -35,8 +35,9 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		unsupportedLogEntries           *prometheus.CounterVec
 	}
 	type args struct {
-		line  []string
-		count int
+		line            []string
+		removedCount    int
+		saslFailedCount int
 	}
 	tests := []struct {
 		name   string
@@ -49,7 +50,12 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				line: []string{
 					"Feb 11 16:49:24 letterman postfix/qmgr[8204]: AAB4D259B1: removed",
 				},
-				count: 1,
+				removedCount:    1,
+				saslFailedCount: 0,
+			},
+			fields: fields{
+				qmgrRemoves:           &testCounter{count: 0},
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
 			},
 		},
 		{
@@ -88,7 +94,28 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 					"Feb 11 16:49:27 letterman postfix/qmgr[8204]: D0EEE2596C: removed",
 					"Feb 11 16:49:27 letterman postfix/qmgr[8204]: DFE732172E: removed",
 				},
-				count: 31,
+				removedCount:    31,
+				saslFailedCount: 0,
+			},
+			fields: fields{
+				qmgrRemoves:           &testCounter{count: 0},
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+			},
+		},
+		{
+			name: "SASL Failed",
+			args: args{
+				line: []string{
+					"Apr 26 10:55:19 tcc1 postfix/smtpd[21126]: warning: SASL authentication failure: cannot connect to saslauthd server: Permission denied",
+					"Apr 26 10:55:19 tcc1 postfix/smtpd[21126]: warning: SASL authentication failure: Password verification failed",
+					"Apr 26 10:55:19 tcc1 postfix/smtpd[21126]: warning: laptop.local[192.168.1.2]: SASL PLAIN authentication failed: generic failure",
+				},
+				saslFailedCount: 1,
+				removedCount:    0,
+			},
+			fields: fields{
+				smtpdSASLAuthenticationFailures: &testCounter{count: 0},
+				unsupportedLogEntries:           prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
 			},
 		},
 	}
@@ -119,16 +146,24 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				smtpdTLSConnects:                tt.fields.smtpdTLSConnects,
 				unsupportedLogEntries:           tt.fields.unsupportedLogEntries,
 			}
-			counter := testCounter{}
-			e.qmgrRemoves = &counter
 			for _, line := range tt.args.line {
 				e.CollectFromLogLine(line)
 			}
-			assert.Equal(t, tt.args.count, counter.Count(), "Wrong number of lines counted")
-			if counter.Count() != tt.args.count {
-				t.Fatal("Counter wrong: ")
-			}
+			assertCounterEquals(t, e.qmgrRemoves, tt.args.removedCount, "Wrong number of lines counted")
+			assertCounterEquals(t, e.smtpdSASLAuthenticationFailures, tt.args.saslFailedCount, "Wrong number of Sasl counter counted")
 		})
+	}
+}
+func assertCounterEquals(t *testing.T, counter prometheus.Counter, expected int, message string) {
+
+	if counter != nil && expected > 0 {
+		switch counter.(type) {
+		case *testCounter:
+			counter := counter.(*testCounter)
+			assert.Equal(t, expected, counter.Count(), message)
+		default:
+			t.Fatal("Type not implemented")
+		}
 	}
 }
 
@@ -144,11 +179,11 @@ func (t *testCounter) Count() int {
 	return t.count
 }
 
-func (t *testCounter) Add(add float64) {
+func (t *testCounter) Add(_ float64) {
 }
-func (t *testCounter) Collect(c chan<- prometheus.Metric) {
+func (t *testCounter) Collect(_ chan<- prometheus.Metric) {
 }
-func (t *testCounter) Describe(c chan<- *prometheus.Desc) {
+func (t *testCounter) Describe(_ chan<- *prometheus.Desc) {
 }
 func (t *testCounter) Desc() *prometheus.Desc {
 	return nil
@@ -156,6 +191,6 @@ func (t *testCounter) Desc() *prometheus.Desc {
 func (t *testCounter) Inc() {
 	t.count++
 }
-func (t *testCounter) Write(x *io_prometheus_client.Metric) error {
+func (t *testCounter) Write(_ *io_prometheus_client.Metric) error {
 	return nil
 }
