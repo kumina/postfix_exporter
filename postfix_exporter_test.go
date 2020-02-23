@@ -35,10 +35,11 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		unsupportedLogEntries           *prometheus.CounterVec
 	}
 	type args struct {
-		line            []string
-		removedCount    int
-		saslFailedCount int
-		outgoingTLS     int
+		line                   []string
+		removedCount           int
+		saslFailedCount        int
+		outgoingTLS            int
+		smtpdMessagesProcessed int
 	}
 	tests := []struct {
 		name   string
@@ -55,7 +56,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				saslFailedCount: 0,
 			},
 			fields: fields{
-				qmgrRemoves:           &testCounter{count: 0},
+				qmgrRemoves:           prometheus.NewCounter(prometheus.CounterOpts{}),
 				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
 			},
 		},
@@ -99,7 +100,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				saslFailedCount: 0,
 			},
 			fields: fields{
-				qmgrRemoves:           &testCounter{count: 0},
+				qmgrRemoves:           prometheus.NewCounter(prometheus.CounterOpts{}),
 				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
 			},
 		},
@@ -115,8 +116,24 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				removedCount:    0,
 			},
 			fields: fields{
-				smtpdSASLAuthenticationFailures: &testCounter{count: 0},
+				smtpdSASLAuthenticationFailures: prometheus.NewCounter(prometheus.CounterOpts{}),
 				unsupportedLogEntries:           prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+			},
+		},
+		{
+			name: "SASL login",
+			args: args{
+				line: []string{
+					"Oct 30 13:19:26 mailgw-out1 postfix/smtpd[27530]: EB4B2C19E2: client=xxx[1.2.3.4], sasl_method=PLAIN, sasl_username=user@domain",
+				},
+				removedCount:           0,
+				saslFailedCount:        0,
+				outgoingTLS:            0,
+				smtpdMessagesProcessed: 1,
+			},
+			fields: fields{
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+				smtpdProcesses:        prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"sasl_method"}),
 			},
 		},
 		{
@@ -169,11 +186,12 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			}
 			assertCounterEquals(t, e.qmgrRemoves, tt.args.removedCount, "Wrong number of lines counted")
 			assertCounterEquals(t, e.smtpdSASLAuthenticationFailures, tt.args.saslFailedCount, "Wrong number of Sasl counter counted")
-			assertCounterVecEquals(t, e.smtpTLSConnects, tt.args.outgoingTLS, "Wrong number of TLS connections counted")
+			assertCounterEquals(t, e.smtpTLSConnects, tt.args.outgoingTLS, "Wrong number of TLS connections counted")
+			assertCounterEquals(t, e.smtpdProcesses, tt.args.smtpdMessagesProcessed, "Wrong number of smtpd messages processed")
 		})
 	}
 }
-func assertCounterVecEquals(t *testing.T, counter prometheus.Collector, expected int, message string) {
+func assertCounterEquals(t *testing.T, counter prometheus.Collector, expected int, message string) {
 
 	if counter != nil && expected > 0 {
 		switch counter.(type) {
@@ -191,48 +209,21 @@ func assertCounterVecEquals(t *testing.T, counter prometheus.Collector, expected
 				count += int(*metricDto.Counter.Value)
 			}
 			assert.Equal(t, expected, count, message)
+		case prometheus.Counter:
+			metricsChan := make(chan prometheus.Metric)
+			go func() {
+				counter.Collect(metricsChan)
+				close(metricsChan)
+			}()
+			var count int = 0
+			for metric := range metricsChan {
+				metricDto := io_prometheus_client.Metric{}
+				metric.Write(&metricDto)
+				count += int(*metricDto.Counter.Value)
+			}
+			assert.Equal(t, expected, count, message)
 		default:
 			t.Fatal("Type not implemented")
 		}
 	}
-}
-func assertCounterEquals(t *testing.T, counter prometheus.Counter, expected int, message string) {
-
-	if counter != nil && expected > 0 {
-		switch counter.(type) {
-		case *testCounter:
-			counter := counter.(*testCounter)
-			assert.Equal(t, expected, counter.Count(), message)
-		default:
-			t.Fatal("Type not implemented")
-		}
-	}
-}
-
-type testCounter struct {
-	count int
-}
-
-func (t *testCounter) setCount(count int) {
-	t.count = count
-}
-
-func (t *testCounter) Count() int {
-	return t.count
-}
-
-func (t *testCounter) Add(_ float64) {
-}
-func (t *testCounter) Collect(_ chan<- prometheus.Metric) {
-}
-func (t *testCounter) Describe(_ chan<- *prometheus.Desc) {
-}
-func (t *testCounter) Desc() *prometheus.Desc {
-	return nil
-}
-func (t *testCounter) Inc() {
-	t.count++
-}
-func (t *testCounter) Write(_ *io_prometheus_client.Metric) error {
-	return nil
 }
