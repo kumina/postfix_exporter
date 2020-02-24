@@ -373,7 +373,7 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 			} else if smtpdProcessesSASLMatches := smtpdProcessesSASLLine.FindStringSubmatch(remainder); smtpdProcessesSASLMatches != nil {
 				e.smtpdProcesses.WithLabelValues(smtpdProcessesSASLMatches[1]).Inc()
 			} else if strings.Contains(remainder, ": client=") {
-				e.smtpdProcesses.WithLabelValues(smtpdProcessesSASLMatches[1]).Inc()
+				e.smtpdProcesses.WithLabelValues("").Inc()
 			} else if smtpdRejectsMatches := smtpdRejectsLine.FindStringSubmatch(remainder); smtpdRejectsMatches != nil {
 				e.smtpdRejects.WithLabelValues(smtpdRejectsMatches[1]).Inc()
 			} else if smtpdSASLAuthenticationFailuresLine.MatchString(remainder) {
