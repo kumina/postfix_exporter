@@ -624,6 +624,8 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	e.smtpdTLSConnects.Describe(ch)
 	ch <- e.smtpStatusDeferred.Desc()
 	e.unsupportedLogEntries.Describe(ch)
+	e.smtpConnectionTimedOut.Describe(ch)
+	e.opendkimSignatureAdded.Describe(ch)
 }
 
 func (e *PostfixExporter) foreverCollectFromJournal(ctx context.Context) {
