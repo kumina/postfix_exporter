@@ -277,7 +277,7 @@ var (
 	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)`)
 	smtpConnectionTimedOut              = regexp.MustCompile(`^connect\s+to\s+(.*)\[(.*)\]:(\d+):\s+(Connection timed out)$`)
 	smtpdFCrDNSErrorsLine               = regexp.MustCompile(`^warning: hostname \S+ does not resolve to address `)
-	smtpdProcessesSASLLine              = regexp.MustCompile(`: client=.*, sasl_username=(\S+)`)
+	smtpdProcessesSASLLine              = regexp.MustCompile(`: client=.*, sasl_method=(\S+)`)
 	smtpdRejectsLine                    = regexp.MustCompile(`^NOQUEUE: reject: RCPT from \S+: ([0-9]+) `)
 	smtpdLostConnectionLine             = regexp.MustCompile(`^lost connection after (\w+) from `)
 	smtpdSASLAuthenticationFailuresLine = regexp.MustCompile(`^warning: \S+: SASL \S+ authentication failed: `)
@@ -364,8 +364,8 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 				e.smtpdLostConnections.WithLabelValues(smtpdLostConnectionMatches[1]).Inc()
 			} else if smtpdProcessesSASLMatches := smtpdProcessesSASLLine.FindStringSubmatch(remainder); smtpdProcessesSASLMatches != nil {
 				e.smtpdProcesses.WithLabelValues(smtpdProcessesSASLMatches[1]).Inc()
-			} else if strings.Contains(logMatches[2], ": client=") {
-				e.smtpdProcesses.WithLabelValues("").Inc()
+			} else if strings.Contains(remainder, ": client=") {
+				e.smtpdProcesses.WithLabelValues(smtpdProcessesSASLMatches[1]).Inc()
 			} else if smtpdRejectsMatches := smtpdRejectsLine.FindStringSubmatch(remainder); smtpdRejectsMatches != nil {
 				e.smtpdRejects.WithLabelValues(smtpdRejectsMatches[1]).Inc()
 			} else if smtpdSASLAuthenticationFailuresLine.MatchString(remainder) {
@@ -557,7 +557,7 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal, 
 				Name:      "smtpd_messages_processed_total",
 				Help:      "Total number of messages processed.",
 			},
-			[]string{"sasl_username"}),
+			[]string{"sasl_method"}),
 		smtpdRejects: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "postfix",
