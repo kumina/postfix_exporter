@@ -152,6 +152,21 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				smtpTLSConnects:       prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"Verified", "TLSv1.2", "ECDHE-RSA-AES256-GCM-SHA384", "256", "256"}),
 			},
 		},
+		{
+			name: "Testing delays",
+			args: args{
+				line: []string{
+					"Feb 24 16:18:40 letterman postfix/smtp[59649]: 5270320179: to=<hebj@telia.com>, relay=mail.telia.com[81.236.60.210]:25, delay=2017, delays=0.1/2017/0.03/0.05, dsn=2.0.0, status=sent (250 2.0.0 6FVIjIMwUJwU66FVIjAEB0 mail accepted for delivery)",
+				},
+				removedCount:           0,
+				saslFailedCount:        0,
+				outgoingTLS:            0,
+				smtpdMessagesProcessed: 0,
+			},
+			fields: fields{
+				smtpDelays: prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"stage"}),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

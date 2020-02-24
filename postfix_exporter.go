@@ -347,10 +347,10 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 			}
 		case "smtp":
 			if smtpMatches := lmtpPipeSMTPLine.FindStringSubmatch(remainder); smtpMatches != nil {
-				addToHistogramVec(e.smtpDelays, smtpMatches[2], "before_queue_manager")
-				addToHistogramVec(e.smtpDelays, smtpMatches[3], "queue_manager")
-				addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup")
-				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission")
+				addToHistogramVec(e.smtpDelays, smtpMatches[2], "before_queue_manager", "")
+				addToHistogramVec(e.smtpDelays, smtpMatches[3], "queue_manager", "")
+				addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup", "")
+				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission", "")
 				if smtpMatches := smtpStatusDeferredLine.FindStringSubmatch(remainder); smtpMatches != nil {
 					e.smtpStatusDeferred.Inc()
 				}
