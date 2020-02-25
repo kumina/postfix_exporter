@@ -4,3 +4,8 @@ go:
   - "1.13"
   - "1.12"
   - stable
+
+addons:
+  apt:
+    packages:
+      - libsystemd-dev
