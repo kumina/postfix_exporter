@@ -1,0 +1,80 @@
+-Queue ID- --Size-- ----Arrival Time---- -Sender/Recipient-------
+C420820802*    4387 Mon Feb 24 13:35:18  sender@example.com
+                                         recipient@lerum.se
+
+8D5D4205B9*    4033 Mon Feb 24 13:22:16  sender@example.com
+                                         recipient@lerum.se
+
+7465520414*    4043 Mon Feb 24 13:22:16  sender@example.com
+                                         recipient@lerum.se
+
+3E2F72070A*    5301 Mon Feb 24 13:35:39  sender@example.com
+                                         recipient@hotmail.se
+
+542032060A*    5828 Mon Feb 24 13:34:46  sender@example.com
+                                         recipient@skatteverket.se
+
+4B96A2037C*    9868 Mon Feb 24 13:32:03  sender@example.com
+                                         recipient@lerum.se
+
+E88EA20796*    5956 Mon Feb 24 13:34:55  sender@example.com
+                                         recipient@edu.halmstad.se
+
+8C9912052C*    4047 Mon Feb 24 13:22:16  sender@example.com
+                                         recipient@lerum.se
+
+70BDA2079B*    4404 Mon Feb 24 13:35:18  sender@example.com
+                                         recipient@lerum.se
+
+76E6A20536*    3875 Mon Feb 24 13:21:20  sender@example.com
+                                         recipient@lerum.se
+
+92C662062A*    3864 Mon Feb 24 13:21:20  sender@example.com
+                                         recipient@lerum.se
+
+BA9BC2071E*    4387 Mon Feb 24 13:35:18  sender@example.com
+                                         recipient@lerum.se
+
+9A67020670*    4393 Mon Feb 24 13:34:06  sender@example.com
+                                         recipient@lerum.se
+
+651AC20138*    3872 Mon Feb 24 13:23:17  sender@example.com
+                                         recipient@lerum.se
+
+4F16D20516*    4052 Mon Feb 24 13:24:38  sender@example.com
+                                         recipient@lerum.se
+
+C9C4A20501*    5099 Mon Feb 24 13:14:10  sender@example.com
+                                         recipient@haninge.se
+
+0572820D64     4098 Sat Feb 22 00:44:54  sender@example.com
+(host mail.wekudata.com[37.208.0.7] said: 452 4.2.2 Quota exceeded (rehanna@stahlstierna.se) (in reply to RCPT TO command))
+                                         recipient@stahlstierna.se
+
+0B2C320952     4173 Sat Feb 22 00:42:07  sender@example.com
+(host alt1.gmail-smtp-in.l.google.com[108.177.97.26] said: 452-4.2.2 The email account that you tried to reach is over quota. Please direct 452-4.2.2 the recipient to 452 4.2.2  https://support.google.com/mail/?p=OverQuotaTemp q24si6538316pgt.498 - gsmtp (in reply to RCPT TO command))
+                                         recipient@gmail.com
+
+0CC2B22124    10926 Fri Feb 21 13:31:58  sender@example.com
+(host alt1.gmail-smtp-in.l.google.com[108.177.97.26] said: 452-4.2.2 The email account that you tried to reach is over quota. Please direct 452-4.2.2 the recipient to 452 4.2.2  https://support.google.com/mail/?p=OverQuotaTemp f10si11999094pgj.597 - gsmtp (in reply to RCPT TO command))
+                                         recipient@gmail.com
+
+0C84020606     4898 Mon Feb 24 08:30:34  sender@example.com
+(host alt1.gmail-smtp-in.l.google.com[108.177.97.26] said: 452-4.2.2 The email account that you tried to reach is over quota. Please direct 452-4.2.2 the recipient to 452 4.2.2  https://support.google.com/mail/?p=OverQuotaTemp 2si12536346pld.231 - gsmtp (in reply to RCPT TO command))
+                                         recipient@gmail.com
+
+04EAA203C0     4133 Mon Feb 24 12:21:58  sender@example.com
+(host alt1.gmail-smtp-in.l.google.com[108.177.97.26] said: 452-4.2.2 The email account that you tried to reach is over quota. Please direct 452-4.2.2 the recipient to 452 4.2.2  https://support.google.com/mail/?p=OverQuotaTemp i16si12220651pfq.60 - gsmtp (in reply to RCPT TO command))
+                                         recipient@gmail.com
+
+00C33202B6     4823 Mon Feb 24 11:32:37  sender@example.com
+                   (connect to gafe.se[151.252.30.111]:25: Connection refused)
+                                         recipient@gafe.se
+
+046E0218CA     4154 Mon Feb 24 00:13:12  sender@example.com
+(host alt1.gmail-smtp-in.l.google.com[108.177.97.26] said: 452-4.2.2 The email account that you tried to reach is over quota. Please direct 452-4.2.2 the recipient to 452 4.2.2  https://support.google.com/mail/?p=OverQuotaTemp y1si11835269pgi.474 - gsmtp (in reply to RCPT TO command))
+                                         recipient@gmail.com
+
+06373212DC     4088 Sat Feb 22 00:34:11  sender@example.com
+           (connect to smtp.falun.se[192.121.234.25]:25: Connection timed out)
+                                         recipient@utb.falun.se

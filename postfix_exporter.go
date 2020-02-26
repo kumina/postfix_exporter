@@ -94,12 +94,6 @@ func CollectShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
 
 // CollectTextualShowqFromReader parses Postfix's textual showq output.
 func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
-	scanner := bufio.NewScanner(file)
-	scanner.Split(bufio.ScanLines)
-
-	// Regular expression for matching postqueue's output. Example:
-	// "A07A81514      5156 Tue Feb 14 13:13:54  MAILER-DAEMON"
-	messageLine := regexp.MustCompile(`^[0-9A-F]+([\*!]?) +(\d+) (\w{3} \w{3} +\d+ +\d+:\d{2}:\d{2}) +`)
 
 	// Histograms tracking the messages by size and age.
 	sizeHistogram := prometheus.NewHistogramVec(
@@ -119,34 +113,51 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 		},
 		[]string{"queue"})
 
+	err := CollectTextualShowqFromScanner(sizeHistogram, ageHistogram, file)
+
+	sizeHistogram.Collect(ch)
+	ageHistogram.Collect(ch)
+	return err
+}
+
+func CollectTextualShowqFromScanner(sizeHistogram prometheus.ObserverVec, ageHistogram prometheus.ObserverVec, file io.Reader) error {
+	scanner := bufio.NewScanner(file)
+	scanner.Split(bufio.ScanLines)
 	// Initialize all queue buckets to zero.
 	for _, q := range []string{"active", "hold", "other"} {
 		sizeHistogram.WithLabelValues(q)
 		ageHistogram.WithLabelValues(q)
 	}
 
-	now := time.Now()
 	location, err := time.LoadLocation("Local")
 	if err != nil {
 		log.Println(err)
 	}
 
+	// Regular expression for matching postqueue's output. Example:
+	// "A07A81514      5156 Tue Feb 14 13:13:54  MAILER-DAEMON"
+	messageLine := regexp.MustCompile(`^[0-9A-F]+([\*!]?) +(\d+) (\w{3} \w{3} +\d+ +\d+:\d{2}:\d{2}) +`)
+
 	for scanner.Scan() {
-		matches := messageLine.FindStringSubmatch(scanner.Text())
-		if matches != nil {
+		text := scanner.Text()
+		matches := messageLine.FindStringSubmatch(text)
+		if matches == nil {
 			continue
 		}
+		queueMatch := matches[1]
+		sizeMatch := matches[2]
+		dateMatch := matches[3]
 
 		// Derive the name of the message queue.
 		queue := "other"
-		if matches[1] == "*" {
+		if queueMatch == "*" {
 			queue = "active"
-		} else if matches[1] == "!" {
+		} else if queueMatch == "!" {
 			queue = "hold"
 		}
 
 		// Parse the message size.
-		size, err := strconv.ParseFloat(matches[2], 64)
+		size, err := strconv.ParseFloat(sizeMatch, 64)
 		if err != nil {
 			return err
 		}
@@ -155,11 +166,11 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 		// output contains no year number. Assume it
 		// applies to the last year for which the
 		// message date doesn't exceed time.Now().
-		date, err := time.ParseInLocation("Mon Jan 2 15:04:05",
-			matches[3], location)
+		date, err := time.ParseInLocation("Mon Jan 2 15:04:05", dateMatch, location)
 		if err != nil {
 			return err
 		}
+		now := time.Now()
 		date = date.AddDate(now.Year(), 0, 0)
 		if date.After(now) {
 			date = date.AddDate(-1, 0, 0)
@@ -168,9 +179,6 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 		sizeHistogram.WithLabelValues(queue).Observe(size)
 		ageHistogram.WithLabelValues(queue).Observe(now.Sub(date).Seconds())
 	}
-
-	sizeHistogram.Collect(ch)
-	ageHistogram.Collect(ch)
 	return scanner.Err()
 }
 
@@ -339,10 +347,10 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 			}
 		case "smtp":
 			if smtpMatches := lmtpPipeSMTPLine.FindStringSubmatch(remainder); smtpMatches != nil {
-				addToHistogramVec(e.smtpDelays, smtpMatches[2], "before_queue_manager")
-				addToHistogramVec(e.smtpDelays, smtpMatches[3], "queue_manager")
-				addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup")
-				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission")
+				addToHistogramVec(e.smtpDelays, smtpMatches[2], "before_queue_manager", "")
+				addToHistogramVec(e.smtpDelays, smtpMatches[3], "queue_manager", "")
+				addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup", "")
+				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission", "")
 				if smtpMatches := smtpStatusDeferredLine.FindStringSubmatch(remainder); smtpMatches != nil {
 					e.smtpStatusDeferred.Inc()
 				}
@@ -365,7 +373,7 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 			} else if smtpdProcessesSASLMatches := smtpdProcessesSASLLine.FindStringSubmatch(remainder); smtpdProcessesSASLMatches != nil {
 				e.smtpdProcesses.WithLabelValues(smtpdProcessesSASLMatches[1]).Inc()
 			} else if strings.Contains(remainder, ": client=") {
-				e.smtpdProcesses.WithLabelValues(smtpdProcessesSASLMatches[1]).Inc()
+				e.smtpdProcesses.WithLabelValues("").Inc()
 			} else if smtpdRejectsMatches := smtpdRejectsLine.FindStringSubmatch(remainder); smtpdRejectsMatches != nil {
 				e.smtpdRejects.WithLabelValues(smtpdRejectsMatches[1]).Inc()
 			} else if smtpdSASLAuthenticationFailuresLine.MatchString(remainder) {
@@ -625,6 +633,8 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	e.smtpdTLSConnects.Describe(ch)
 	ch <- e.smtpStatusDeferred.Desc()
 	e.unsupportedLogEntries.Describe(ch)
+	e.smtpConnectionTimedOut.Describe(ch)
+	e.opendkimSignatureAdded.Describe(ch)
 }
 
 func (e *PostfixExporter) foreverCollectFromJournal(ctx context.Context) {

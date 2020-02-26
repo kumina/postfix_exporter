@@ -125,11 +125,12 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			args: args{
 				line: []string{
 					"Oct 30 13:19:26 mailgw-out1 postfix/smtpd[27530]: EB4B2C19E2: client=xxx[1.2.3.4], sasl_method=PLAIN, sasl_username=user@domain",
+					"Feb 24 16:42:00 letterman postfix/smtpd[24906]: 1CF582025C: client=xxx[2.3.4.5]",
 				},
 				removedCount:           0,
 				saslFailedCount:        0,
 				outgoingTLS:            0,
-				smtpdMessagesProcessed: 1,
+				smtpdMessagesProcessed: 2,
 			},
 			fields: fields{
 				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
@@ -150,6 +151,21 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			fields: fields{
 				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
 				smtpTLSConnects:       prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"Verified", "TLSv1.2", "ECDHE-RSA-AES256-GCM-SHA384", "256", "256"}),
+			},
+		},
+		{
+			name: "Testing delays",
+			args: args{
+				line: []string{
+					"Feb 24 16:18:40 letterman postfix/smtp[59649]: 5270320179: to=<hebj@telia.com>, relay=mail.telia.com[81.236.60.210]:25, delay=2017, delays=0.1/2017/0.03/0.05, dsn=2.0.0, status=sent (250 2.0.0 6FVIjIMwUJwU66FVIjAEB0 mail accepted for delivery)",
+				},
+				removedCount:           0,
+				saslFailedCount:        0,
+				outgoingTLS:            0,
+				smtpdMessagesProcessed: 0,
+			},
+			fields: fields{
+				smtpDelays: prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"stage"}),
 			},
 		},
 	}
