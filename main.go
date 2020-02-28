@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"github.com/alecthomas/kingpin"
-	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
@@ -52,9 +51,8 @@ func main() {
 	}
 	prometheus.MustRegister(exporter)
 
-	r := mux.NewRouter()
-	r.Handle(*metricsPath, promhttp.Handler())
-	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	http.Handle(*metricsPath, promhttp.Handler())
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		_, err = w.Write([]byte(`
 			<html>
 			<head><title>Postfix Exporter</title></head>
@@ -76,7 +74,6 @@ func main() {
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 5 * time.Second,
 		IdleTimeout:  60 * time.Second,
-		Handler:      r,
 	}
 	go func() {
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
