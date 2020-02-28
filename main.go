@@ -2,15 +2,15 @@ package main
 
 import (
 	"context"
+	"github.com/alecthomas/kingpin"
+	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
-
-	"github.com/alecthomas/kingpin"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -52,8 +52,9 @@ func main() {
 	}
 	prometheus.MustRegister(exporter)
 
-	http.Handle(*metricsPath, promhttp.Handler())
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	r := mux.NewRouter()
+	r.Handle(*metricsPath, promhttp.Handler())
+	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		_, err = w.Write([]byte(`
 			<html>
 			<head><title>Postfix Exporter</title></head>
@@ -69,39 +70,33 @@ func main() {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	collectionFinished := exporter.StartMetricCollection(ctx)
 	log.Print("Listening on ", *listenAddress)
-	var srv http.Server = http.Server{Addr: *listenAddress}
-	idleConnsClosed := catchInterruptAndShutdownServer(ctx, srv)
 
-	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-		// Error starting or closing listener:
-		log.Fatalf("HTTP server ListenAndServe: %v", err)
+	var srv = http.Server{
+		Addr:         *listenAddress,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		Handler:      r,
 	}
-	log.Print("Cleanup")
+	go func() {
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			// Error starting or closing listener:
+			log.Fatalf("HTTP server ListenAndServe: %v", err)
+		}
+	}()
+
+	sigint := make(chan os.Signal, 1)
+	signal.Notify(sigint, os.Interrupt)
+	<-sigint
+	log.Print("Shutting down")
+	timeoutCtx, c := context.WithTimeout(ctx, 15*time.Second)
+	defer c()
+	err = srv.Shutdown(timeoutCtx)
+	if err != nil {
+		log.Print(err)
+	}
 	cancelFunc()
-	log.Print("Canceled")
-	<-idleConnsClosed
-	log.Print("Idles closed")
 	<-collectionFinished
 	log.Print("Shutdown completed")
-}
-
-func catchInterruptAndShutdownServer(ctx context.Context, srv http.Server) <-chan struct{} {
-	idleConnsClosed := make(chan struct{})
-	go func() {
-		sigint := make(chan os.Signal, 1)
-		signal.Notify(sigint, os.Interrupt)
-		<-sigint
-		// Give Server 1 second to cleanly shut down
-		d := time.Now().Add(100 * time.Millisecond)
-		// We received an interrupt signal, shut down.
-		deadlineCtx, _ := context.WithDeadline(ctx, d)
-		log.Printf("Shutting down. Waiting for %v", d)
-		if err := srv.Shutdown(deadlineCtx); err != nil {
-			// Error from closing listeners, or context timeout:
-			log.Printf("HTTP server Shutdown: %v", err)
-		}
-		log.Print("Shutdown completed")
-		close(idleConnsClosed)
-	}()
-	return idleConnsClosed
+	os.Exit(0)
 }
