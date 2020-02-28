@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"time"
 
 	"github.com/alecthomas/kingpin"
 	"github.com/prometheus/client_golang/prometheus"
@@ -65,8 +67,41 @@ func main() {
 		}
 	})
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	defer cancelFunc()
-	go exporter.StartMetricCollection(ctx)
+	collectionFinished := exporter.StartMetricCollection(ctx)
 	log.Print("Listening on ", *listenAddress)
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
+	var srv http.Server = http.Server{Addr: *listenAddress}
+	idleConnsClosed := catchInterruptAndShutdownServer(ctx, srv)
+
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		// Error starting or closing listener:
+		log.Fatalf("HTTP server ListenAndServe: %v", err)
+	}
+	log.Print("Cleanup")
+	cancelFunc()
+	log.Print("Canceled")
+	<-idleConnsClosed
+	log.Print("Idles closed")
+	<-collectionFinished
+	log.Print("Shutdown completed")
+}
+
+func catchInterruptAndShutdownServer(ctx context.Context, srv http.Server) <-chan struct{} {
+	idleConnsClosed := make(chan struct{})
+	go func() {
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt)
+		<-sigint
+		// Give Server 1 second to cleanly shut down
+		d := time.Now().Add(100 * time.Millisecond)
+		// We received an interrupt signal, shut down.
+		deadlineCtx, _ := context.WithDeadline(ctx, d)
+		log.Printf("Shutting down. Waiting for %v", d)
+		if err := srv.Shutdown(deadlineCtx); err != nil {
+			// Error from closing listeners, or context timeout:
+			log.Printf("HTTP server Shutdown: %v", err)
+		}
+		log.Print("Shutdown completed")
+		close(idleConnsClosed)
+	}()
+	return idleConnsClosed
 }

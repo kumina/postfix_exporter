@@ -661,12 +661,16 @@ func (e *PostfixExporter) foreverCollectFromJournal(ctx context.Context) {
 	}
 }
 
-func (e *PostfixExporter) StartMetricCollection(ctx context.Context) {
-	if e.journal != nil {
-		e.foreverCollectFromJournal(ctx)
-	} else {
-		e.CollectLogfileFromFile(ctx)
-	}
+func (e *PostfixExporter) StartMetricCollection(ctx context.Context) <-chan interface{} {
+	done := make(chan interface{})
+	go func() {
+		defer close(done)
+		if e.journal != nil {
+			e.foreverCollectFromJournal(ctx)
+		} else {
+			e.CollectLogfileFromFile(ctx)
+		}
+	}()
 
 	prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -676,7 +680,7 @@ func (e *PostfixExporter) StartMetricCollection(ctx context.Context) {
 			Help:      "Whether scraping Postfix's metrics was successful.",
 		},
 		[]string{"path"})
-	return
+	return done
 }
 
 // Collect metrics from Postfix's showq socket and its log file.
