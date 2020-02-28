@@ -233,6 +233,7 @@ func NewLogCollector(logfilePath string, journal *Journal, logUnsupportedLines b
 			return nil, err
 		}
 	}
+	timeBuckets := []float64{1e-3, 1e-2, 1e-1, 1.0, 10, 1 * 60, 1 * 60 * 60, 24 * 60 * 60, 2 * 24 * 60 * 60}
 	return &LogCollector{
 		logUnsupportedLines: logUnsupportedLines,
 		tailer:              tailer,
@@ -259,7 +260,7 @@ func NewLogCollector(logfilePath string, journal *Journal, logUnsupportedLines b
 				Namespace: "postfix",
 				Name:      "lmtp_delivery_delay_seconds",
 				Help:      "LMTP message processing time in seconds.",
-				Buckets:   []float64{1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3},
+				Buckets:   timeBuckets,
 			},
 			[]string{"stage"}),
 		pipeDelays: prometheus.NewHistogramVec(
@@ -267,7 +268,7 @@ func NewLogCollector(logfilePath string, journal *Journal, logUnsupportedLines b
 				Namespace: "postfix",
 				Name:      "pipe_delivery_delay_seconds",
 				Help:      "Pipe message processing time in seconds.",
-				Buckets:   []float64{1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3},
+				Buckets:   timeBuckets,
 			},
 			[]string{"relay", "stage"}),
 		qmgrInsertsNrcpt: prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -292,7 +293,7 @@ func NewLogCollector(logfilePath string, journal *Journal, logUnsupportedLines b
 				Namespace: "postfix",
 				Name:      "smtp_delivery_delay_seconds",
 				Help:      "SMTP message processing time in seconds.",
-				Buckets:   []float64{1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3},
+				Buckets:   timeBuckets,
 			},
 			[]string{"stage"}),
 		smtpTLSConnects: prometheus.NewCounterVec(
