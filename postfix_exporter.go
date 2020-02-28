@@ -32,10 +32,10 @@ import (
 )
 
 var (
-	postfixUpDesc = prometheus.NewDesc(
-		prometheus.BuildFQName("postfix", "", "up"),
-		"Whether scraping Postfix's metrics was successful.",
-		[]string{"path"}, nil)
+	upDesc = prometheus.NewDesc(
+		prometheus.BuildFQName("", "", "up"),
+		"Whether Postfix_exporter is running.",
+		nil, nil)
 )
 
 // PostfixExporter holds the state that should be preserved by the
@@ -70,6 +70,7 @@ type PostfixExporter struct {
 	unsupportedLogEntries           *prometheus.CounterVec
 	smtpStatusDeferred              prometheus.Counter
 	opendkimSignatureAdded          *prometheus.CounterVec
+	postfixUp                       *prometheus.GaugeVec
 }
 
 // CollectShowqFromReader parses the output of Postfix's 'showq' command
@@ -422,15 +423,8 @@ func addToHistogramVec(h *prometheus.HistogramVec, value, fieldName string, labe
 
 // CollectLogfileFromFile tails a Postfix log file and collects entries from it.
 func (e *PostfixExporter) CollectLogfileFromFile(ctx context.Context) {
-	gaugeVec := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "postfix",
-			Subsystem: "",
-			Name:      "up",
-			Help:      "Whether scraping Postfix's metrics was successful.",
-		},
-		[]string{"path"})
-	gauge := gaugeVec.WithLabelValues(e.tailer.Filename)
+	gauge := e.postfixUp.WithLabelValues(e.tailer.Filename)
+	gauge.Set(1)
 	for {
 		select {
 		case line := <-e.tailer.Lines:
@@ -439,7 +433,6 @@ func (e *PostfixExporter) CollectLogfileFromFile(ctx context.Context) {
 			gauge.Set(0)
 			return
 		}
-		gauge.Set(1)
 	}
 }
 
@@ -464,6 +457,14 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal, 
 		tailer:              tailer,
 		journal:             journal,
 
+		postfixUp: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "postfix",
+				Subsystem: "",
+				Name:      "up",
+				Help:      "Whether scraping Postfix's metrics was successful.",
+			},
+			[]string{"path"}),
 		cleanupProcesses: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "postfix",
 			Name:      "cleanup_messages_processed_total",
@@ -610,8 +611,9 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal, 
 
 // Describe the Prometheus metrics that are going to be exported.
 func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
-	ch <- postfixUpDesc
+	ch <- upDesc
 
+	e.postfixUp.Describe(ch)
 	ch <- e.cleanupProcesses.Desc()
 	ch <- e.cleanupRejects.Desc()
 	ch <- e.cleanupNotAccepted.Desc()
@@ -638,25 +640,17 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (e *PostfixExporter) foreverCollectFromJournal(ctx context.Context) {
-	gauge := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "postfix",
-			Subsystem: "",
-			Name:      "up",
-			Help:      "Whether scraping Postfix's metrics was successful.",
-		},
-		[]string{"path"}).WithLabelValues(e.journal.Path)
 	select {
 	case <-ctx.Done():
-		gauge.Set(0)
+		e.postfixUp.WithLabelValues(e.journal.Path).Set(0)
 		return
 	default:
 		err := e.CollectLogfileFromJournal()
 		if err != nil {
 			log.Printf("Couldn't read journal: %v", err)
-			gauge.Set(0)
+			e.postfixUp.WithLabelValues(e.journal.Path).Set(0)
 		} else {
-			gauge.Set(1)
+			e.postfixUp.WithLabelValues(e.journal.Path).Set(1)
 		}
 	}
 }
@@ -671,36 +665,24 @@ func (e *PostfixExporter) StartMetricCollection(ctx context.Context) <-chan inte
 			e.CollectLogfileFromFile(ctx)
 		}
 	}()
-
-	prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "postfix",
-			Subsystem: "",
-			Name:      "up",
-			Help:      "Whether scraping Postfix's metrics was successful.",
-		},
-		[]string{"path"})
 	return done
 }
 
 // Collect metrics from Postfix's showq socket and its log file.
 func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
+	ch <- prometheus.MustNewConstMetric(
+		upDesc,
+		prometheus.GaugeValue,
+		1.0,
+	)
 	err := CollectShowqFromSocket(e.showqPath, ch)
 	if err == nil {
-		ch <- prometheus.MustNewConstMetric(
-			postfixUpDesc,
-			prometheus.GaugeValue,
-			1.0,
-			e.showqPath)
+		e.postfixUp.WithLabelValues(e.showqPath).Set(1)
 	} else {
 		log.Printf("Failed to scrape showq socket: %s", err)
-		ch <- prometheus.MustNewConstMetric(
-			postfixUpDesc,
-			prometheus.GaugeValue,
-			0.0,
-			e.showqPath)
+		e.postfixUp.WithLabelValues(e.showqPath).Set(0)
 	}
-
+	e.postfixUp.Collect(ch)
 	ch <- e.cleanupProcesses
 	ch <- e.cleanupRejects
 	ch <- e.cleanupNotAccepted
