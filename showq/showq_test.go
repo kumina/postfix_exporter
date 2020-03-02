@@ -45,7 +45,7 @@ func TestCollectShowqFromReader(t *testing.T) {
 
 			sizeHistogram := mock.NewHistogramVecMock()
 			ageHistogram := mock.NewHistogramVecMock()
-			showQ := NewShowQCollector(tt.args.file, mock.GaugeVec{})
+			showQ := NewShowQCollector(tt.args.file, mock.GaugeVec{}, "10s")
 			showQ.ageHistogram = ageHistogram
 			showQ.sizeHistogram = sizeHistogram
 			if err := showQ.CollectShowqFromSocket(socket); (err != nil) != tt.wantErr {

@@ -407,7 +407,7 @@ func (e *LogCollector) foreverCollectFromJournal(ctx context.Context) {
 	}
 }
 
-func (e *LogCollector)  StartMetricCollection(ctx context.Context) <-chan interface{} {
+func (e *LogCollector) StartMetricCollection(ctx context.Context) <-chan interface{} {
 	done := make(chan interface{})
 	go func() {
 		defer close(done)

@@ -3,6 +3,7 @@ package showq
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
@@ -19,16 +20,18 @@ type GaugeVec interface {
 	WithLabelValues(lvs ...string) prometheus.Gauge
 }
 type ShowQ struct {
-	path          string
-	sizeHistogram prometheus.ObserverVec
-	ageHistogram  prometheus.ObserverVec
-	upGauge       GaugeVec
+	path           string
+	sizeHistogram  prometheus.ObserverVec
+	ageHistogram   prometheus.ObserverVec
+	upGauge        GaugeVec
+	scrapeInterval string
 }
 
-func NewShowQCollector(path string, upGauge GaugeVec) *ShowQ {
+func NewShowQCollector(path string, upGauge GaugeVec, interval string) *ShowQ {
 	return &ShowQ{
-		path:    path,
-		upGauge: upGauge,
+		path:           path,
+		upGauge:        upGauge,
+		scrapeInterval: interval,
 		sizeHistogram: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Namespace: "postfix",
@@ -48,19 +51,42 @@ func NewShowQCollector(path string, upGauge GaugeVec) *ShowQ {
 	}
 }
 
+func (s *ShowQ) StartMetricCollection(ctx context.Context) (<-chan interface{}, error) {
+	done := make(chan interface{})
+	duration, err := time.ParseDuration(s.scrapeInterval)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse duration '%s': %v", s.scrapeInterval, err)
+	}
+	go func() {
+		defer close(done)
+		gauge := s.upGauge.WithLabelValues(s.path)
+		ticker := time.NewTicker(duration)
+		for {
+			select {
+			case <-ctx.Done():
+				gauge.Set(0)
+				return
+			case <-ticker.C:
+				err := s.CollectShowqFromSocket(s.path)
+				if err == nil {
+					gauge.Set(1)
+				} else {
+					log.Printf("Failed to scrape showq socket: %s", err)
+					gauge.Set(0)
+				}
+			}
+		}
+
+	}()
+	return done, nil
+}
+
 func (s ShowQ) Describe(ch chan<- *prometheus.Desc) {
 	s.ageHistogram.Describe(ch)
 	s.sizeHistogram.Describe(ch)
 }
 
 func (s ShowQ) Collect(ch chan<- prometheus.Metric) {
-	err := s.CollectShowqFromSocket(s.path)
-	if err == nil {
-		s.upGauge.WithLabelValues(s.path).Set(1)
-	} else {
-		log.Printf("Failed to scrape showq socket: %s", err)
-		s.upGauge.WithLabelValues(s.path).Set(0)
-	}
 	s.sizeHistogram.Collect(ch)
 	s.ageHistogram.Collect(ch)
 }

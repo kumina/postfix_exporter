@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
+	"github.com/alecthomas/kingpin"
 	"github.com/kumina/postfix_exporter/logCollector"
 	"github.com/kumina/postfix_exporter/showq"
-	"github.com/alecthomas/kingpin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
@@ -20,6 +20,7 @@ func main() {
 		listenAddress                                 = app.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9154").String()
 		metricsPath                                   = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
 		postfixShowqPath                              = app.Flag("postfix.showq_path", "Path at which Postfix places its showq socket.").Default("/var/spool/postfix/public/showq").String()
+		postfixShowqInterval                          = app.Flag("postfix.showq_interval", "Interval between showq scrapes.").Default("10s").String()
 		postfixLogfilePath                            = app.Flag("postfix.logfile_path", "Path where Postfix writes log entries.").Default("/var/log/maillog").String()
 		logUnsupportedLines                           = app.Flag("log.unsupported", "Log all unsupported lines.").Bool()
 		systemdEnable                                 bool
@@ -51,7 +52,7 @@ func main() {
 		[]string{"path"})
 	prometheus.MustRegister(postfixUp)
 
-	showQ := showq.NewShowQCollector(*postfixShowqPath, postfixUp)
+	showQ := showq.NewShowQCollector(*postfixShowqPath, postfixUp, *postfixShowqInterval)
 	prometheus.MustRegister(showQ)
 
 	logFileCollector, err := logCollector.NewLogCollector(*postfixLogfilePath, journal, *logUnsupportedLines, postfixUp)
@@ -76,7 +77,11 @@ func main() {
 	})
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
-	collectionFinished := logFileCollector.StartMetricCollection(ctx)
+	logCollectionDone := logFileCollector.StartMetricCollection(ctx)
+	showqCollectionDone, err := showQ.StartMetricCollection(ctx)
+	if err != nil {
+		log.Printf("failed to start showq metrics collection: %v", err)
+	}
 	log.Print("Listening on ", *listenAddress)
 
 	var srv = http.Server{
@@ -103,7 +108,8 @@ func main() {
 		log.Print(err)
 	}
 	cancelFunc()
-	<-collectionFinished
+	<-logCollectionDone
+	<-showqCollectionDone
 	log.Print("Shutdown completed")
 	os.Exit(0)
 }
