@@ -1,7 +1,7 @@
 // +build nosystemd !linux
 // This file contains stubs to support non-systemd use
 
-package main
+package logCollector
 
 import (
 	"io"
@@ -14,12 +14,12 @@ type Journal struct {
 	Path string
 }
 
-func systemdFlags(enable *bool, unit, slice, path *string, app *kingpin.Application) {}
+func SystemdFlags(enable *bool, unit, slice, path *string, app *kingpin.Application) {}
 
 func NewJournal(unit, slice, path string) (*Journal, error) {
 	return nil, nil
 }
 
-func (e *PostfixExporter) CollectLogfileFromJournal() error {
+func (e *LogCollector) CollectLogfileFromJournal() error {
 	return nil
 }

@@ -14,7 +14,7 @@ COPY . .
 
 # Force the go compiler to use modules
 ENV GO111MODULE=on
-RUN go test
+RUN go test ./...
 RUN go build -o /bin/postfix_exporter
 
 FROM debian:latest

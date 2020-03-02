@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"github.com/kumina/postfix_exporter/logCollector"
+	"github.com/kumina/postfix_exporter/showq"
 	"github.com/alecthomas/kingpin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -14,7 +16,7 @@ import (
 
 func main() {
 	var (
-		app                                           = kingpin.New("postfix_exporter", "Prometheus metrics exporter for postfix")
+		app                                           = kingpin.New("postfix_exporter", "Prometheus metrics logFileCollector for postfix")
 		listenAddress                                 = app.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9154").String()
 		metricsPath                                   = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
 		postfixShowqPath                              = app.Flag("postfix.showq_path", "Path at which Postfix places its showq socket.").Default("/var/spool/postfix/public/showq").String()
@@ -23,14 +25,14 @@ func main() {
 		systemdEnable                                 bool
 		systemdUnit, systemdSlice, systemdJournalPath string
 	)
-	systemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath, app)
+	logCollector.SystemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath, app)
 
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
-	var journal *Journal
+	var journal *logCollector.Journal
 	if systemdEnable {
 		var err error
-		journal, err = NewJournal(systemdUnit, systemdSlice, systemdJournalPath)
+		journal, err = logCollector.NewJournal(systemdUnit, systemdSlice, systemdJournalPath)
 		if err != nil {
 			log.Fatalf("Error opening systemd journal: %s", err)
 		}
@@ -39,17 +41,24 @@ func main() {
 	} else {
 		log.Printf("Reading log events from %v", *postfixLogfilePath)
 	}
+	postfixUp := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "postfix",
+			Subsystem: "",
+			Name:      "up",
+			Help:      "Whether scraping Postfix's metrics was successful.",
+		},
+		[]string{"path"})
+	prometheus.MustRegister(postfixUp)
 
-	exporter, err := NewPostfixExporter(
-		*postfixShowqPath,
-		*postfixLogfilePath,
-		journal,
-		*logUnsupportedLines,
-	)
+	showQ := showq.NewShowQCollector(*postfixShowqPath, postfixUp)
+	prometheus.MustRegister(showQ)
+
+	logFileCollector, err := logCollector.NewLogCollector(*postfixLogfilePath, journal, *logUnsupportedLines, postfixUp)
 	if err != nil {
-		log.Fatalf("Failed to create PostfixExporter: %s", err)
+		log.Fatalf("Failed to create LogCollector: %s", err)
 	}
-	prometheus.MustRegister(exporter)
+	prometheus.MustRegister(logFileCollector)
 
 	http.Handle(*metricsPath, promhttp.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +75,8 @@ func main() {
 		}
 	})
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	collectionFinished := exporter.StartMetricCollection(ctx)
+	defer cancelFunc()
+	collectionFinished := logFileCollector.StartMetricCollection(ctx)
 	log.Print("Listening on ", *listenAddress)
 
 	var srv = http.Server{

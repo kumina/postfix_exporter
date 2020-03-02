@@ -1,6 +1,6 @@
 // +build !nosystemd,linux
 
-package main
+package logCollector
 
 import (
 	"fmt"
@@ -88,7 +88,7 @@ func (j *Journal) NextMessage() (s string, c uint64, err error) {
 }
 
 // systemdFlags sets the flags for use with systemd
-func systemdFlags(enable *bool, unit, slice, path *string, app *kingpin.Application) {
+func SystemdFlags(enable *bool, unit, slice, path *string, app *kingpin.Application) {
 	app.Flag("systemd.enable", "Read from the systemd journal instead of log").Default("false").BoolVar(enable)
 	app.Flag("systemd.unit", "Name of the Postfix systemd unit.").Default("postfix.service").StringVar(unit)
 	app.Flag("systemd.slice", "Name of the Postfix systemd slice. Overrides the systemd unit.").Default("").StringVar(slice)
@@ -96,7 +96,7 @@ func systemdFlags(enable *bool, unit, slice, path *string, app *kingpin.Applicat
 }
 
 // CollectLogfileFromJournal Collects entries from the systemd journal.
-func (e *PostfixExporter) CollectLogfileFromJournal() error {
+func (e *LogCollector) CollectLogfileFromJournal() error {
 	e.journal.Lock()
 	defer e.journal.Unlock()
 

@@ -11,37 +11,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package logCollector
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"errors"
-	"fmt"
+	"github.com/hpcloud/tail"
+	"github.com/kumina/postfix_exporter/showq"
+	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"log"
-	"net"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/hpcloud/tail"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
-var (
-	postfixUpDesc = prometheus.NewDesc(
-		prometheus.BuildFQName("postfix", "", "up"),
-		"Whether scraping Postfix's metrics was successful.",
-		[]string{"path"}, nil)
-)
-
-// PostfixExporter holds the state that should be preserved by the
+// LogCollector holds the state that should be preserved by the
 // Postfix Prometheus metrics exporter across scrapes.
-type PostfixExporter struct {
-	showqPath           string
+type LogCollector struct {
 	journal             *Journal
 	tailer              *tail.Tail
 	logUnsupportedLines bool
@@ -70,210 +56,7 @@ type PostfixExporter struct {
 	unsupportedLogEntries           *prometheus.CounterVec
 	smtpStatusDeferred              prometheus.Counter
 	opendkimSignatureAdded          *prometheus.CounterVec
-}
-
-// CollectShowqFromReader parses the output of Postfix's 'showq' command
-// and turns it into metrics.
-//
-// The output format of this command depends on the version of Postfix
-// used. Postfix 2.x uses a textual format, identical to the output of
-// the 'mailq' command. Postfix 3.x uses a binary format, where entries
-// are terminated using null bytes. Auto-detect the format by scanning
-// for null bytes in the first 128 bytes of output.
-func CollectShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
-	reader := bufio.NewReader(file)
-	buf, err := reader.Peek(128)
-	if err != nil && err != io.EOF {
-		log.Printf("Could not read postfix output, %v", err)
-	}
-	if bytes.IndexByte(buf, 0) >= 0 {
-		return CollectBinaryShowqFromReader(reader, ch)
-	}
-	return CollectTextualShowqFromReader(reader, ch)
-}
-
-// CollectTextualShowqFromReader parses Postfix's textual showq output.
-func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
-
-	// Histograms tracking the messages by size and age.
-	sizeHistogram := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "postfix",
-			Name:      "showq_message_size_bytes",
-			Help:      "Size of messages in Postfix's message queue, in bytes",
-			Buckets:   []float64{1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9},
-		},
-		[]string{"queue"})
-	ageHistogram := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "postfix",
-			Name:      "showq_message_age_seconds",
-			Help:      "Age of messages in Postfix's message queue, in seconds",
-			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
-		},
-		[]string{"queue"})
-
-	err := CollectTextualShowqFromScanner(sizeHistogram, ageHistogram, file)
-
-	sizeHistogram.Collect(ch)
-	ageHistogram.Collect(ch)
-	return err
-}
-
-func CollectTextualShowqFromScanner(sizeHistogram prometheus.ObserverVec, ageHistogram prometheus.ObserverVec, file io.Reader) error {
-	scanner := bufio.NewScanner(file)
-	scanner.Split(bufio.ScanLines)
-	// Initialize all queue buckets to zero.
-	for _, q := range []string{"active", "hold", "other"} {
-		sizeHistogram.WithLabelValues(q)
-		ageHistogram.WithLabelValues(q)
-	}
-
-	location, err := time.LoadLocation("Local")
-	if err != nil {
-		log.Println(err)
-	}
-
-	// Regular expression for matching postqueue's output. Example:
-	// "A07A81514      5156 Tue Feb 14 13:13:54  MAILER-DAEMON"
-	messageLine := regexp.MustCompile(`^[0-9A-F]+([\*!]?) +(\d+) (\w{3} \w{3} +\d+ +\d+:\d{2}:\d{2}) +`)
-
-	for scanner.Scan() {
-		text := scanner.Text()
-		matches := messageLine.FindStringSubmatch(text)
-		if matches == nil {
-			continue
-		}
-		queueMatch := matches[1]
-		sizeMatch := matches[2]
-		dateMatch := matches[3]
-
-		// Derive the name of the message queue.
-		queue := "other"
-		if queueMatch == "*" {
-			queue = "active"
-		} else if queueMatch == "!" {
-			queue = "hold"
-		}
-
-		// Parse the message size.
-		size, err := strconv.ParseFloat(sizeMatch, 64)
-		if err != nil {
-			return err
-		}
-
-		// Parse the message date. Unfortunately, the
-		// output contains no year number. Assume it
-		// applies to the last year for which the
-		// message date doesn't exceed time.Now().
-		date, err := time.ParseInLocation("Mon Jan 2 15:04:05", dateMatch, location)
-		if err != nil {
-			return err
-		}
-		now := time.Now()
-		date = date.AddDate(now.Year(), 0, 0)
-		if date.After(now) {
-			date = date.AddDate(-1, 0, 0)
-		}
-
-		sizeHistogram.WithLabelValues(queue).Observe(size)
-		ageHistogram.WithLabelValues(queue).Observe(now.Sub(date).Seconds())
-	}
-	return scanner.Err()
-}
-
-// ScanNullTerminatedEntries is a splitting function for bufio.Scanner
-// to split entries by null bytes.
-func ScanNullTerminatedEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if i := bytes.IndexByte(data, 0); i >= 0 {
-		// Valid record found.
-		return i + 1, data[0:i], nil
-	} else if atEOF && len(data) != 0 {
-		// Data at the end of the file without a null terminator.
-		return 0, nil, errors.New("Expected null byte terminator")
-	} else {
-		// Request more data.
-		return 0, nil, nil
-	}
-}
-
-// CollectBinaryShowqFromReader parses Postfix's binary showq format.
-func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
-	scanner := bufio.NewScanner(file)
-	scanner.Split(ScanNullTerminatedEntries)
-
-	// Histograms tracking the messages by size and age.
-	sizeHistogram := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "postfix",
-			Name:      "showq_message_size_bytes",
-			Help:      "Size of messages in Postfix's message queue, in bytes",
-			Buckets:   []float64{1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9},
-		},
-		[]string{"queue"})
-	ageHistogram := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "postfix",
-			Name:      "showq_message_age_seconds",
-			Help:      "Age of messages in Postfix's message queue, in seconds",
-			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
-		},
-		[]string{"queue"})
-
-	// Initialize all queue buckets to zero.
-	for _, q := range []string{"active", "deferred", "hold", "incoming", "maildrop"} {
-		sizeHistogram.WithLabelValues(q)
-		ageHistogram.WithLabelValues(q)
-	}
-
-	now := float64(time.Now().UnixNano()) / 1e9
-	queue := "unknown"
-	for scanner.Scan() {
-		// Parse a key/value entry.
-		key := scanner.Text()
-		if len(key) == 0 {
-			// Empty key means a record separator.
-			queue = "unknown"
-			continue
-		}
-		if !scanner.Scan() {
-			return fmt.Errorf("key %q does not have a value", key)
-		}
-		value := scanner.Text()
-
-		if key == "queue_name" {
-			// The name of the message queue.
-			queue = value
-		} else if key == "size" {
-			// Message size in bytes.
-			size, err := strconv.ParseFloat(value, 64)
-			if err != nil {
-				return err
-			}
-			sizeHistogram.WithLabelValues(queue).Observe(size)
-		} else if key == "time" {
-			// Message time as a UNIX timestamp.
-			utime, err := strconv.ParseFloat(value, 64)
-			if err != nil {
-				return err
-			}
-			ageHistogram.WithLabelValues(queue).Observe(now - utime)
-		}
-	}
-
-	sizeHistogram.Collect(ch)
-	ageHistogram.Collect(ch)
-	return scanner.Err()
-}
-
-// CollectShowqFromSocket collects Postfix queue statistics from a socket.
-func CollectShowqFromSocket(path string, ch chan<- prometheus.Metric) error {
-	fd, err := net.Dial("unix", path)
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-	return CollectShowqFromReader(fd, ch)
+	postfixUp                       showq.GaugeVec
 }
 
 // Patterns for parsing log messages.
@@ -294,7 +77,7 @@ var (
 )
 
 // CollectFromLogline collects metrict from a Postfix log line.
-func (e *PostfixExporter) CollectFromLogLine(line string) {
+func (e *LogCollector) CollectFromLogLine(line string) {
 	// Strip off timestamp, hostname, etc.
 	logMatches := logLine.FindStringSubmatch(line)
 
@@ -398,7 +181,7 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 	}
 }
 
-func (e *PostfixExporter) addToUnsupportedLine(line string, subprocess string) {
+func (e *LogCollector) addToUnsupportedLine(line string, subprocess string) {
 	if e.logUnsupportedLines {
 		log.Printf("Unsupported Line: %v", line)
 	}
@@ -421,16 +204,8 @@ func addToHistogramVec(h *prometheus.HistogramVec, value, fieldName string, labe
 }
 
 // CollectLogfileFromFile tails a Postfix log file and collects entries from it.
-func (e *PostfixExporter) CollectLogfileFromFile(ctx context.Context) {
-	gaugeVec := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "postfix",
-			Subsystem: "",
-			Name:      "up",
-			Help:      "Whether scraping Postfix's metrics was successful.",
-		},
-		[]string{"path"})
-	gauge := gaugeVec.WithLabelValues(e.tailer.Filename)
+func (e *LogCollector) CollectLogfileFromFile(ctx context.Context) {
+	gauge := e.postfixUp.WithLabelValues(e.tailer.Filename)
 	for {
 		select {
 		case line := <-e.tailer.Lines:
@@ -443,8 +218,8 @@ func (e *PostfixExporter) CollectLogfileFromFile(ctx context.Context) {
 	}
 }
 
-// NewPostfixExporter creates a new Postfix exporter instance.
-func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal, logUnsupportedLines bool) (*PostfixExporter, error) {
+// NewLogCollector creates a new Postfix exporter instance.
+func NewLogCollector(logfilePath string, journal *Journal, logUnsupportedLines bool, postfixUp showq.GaugeVec) (*LogCollector, error) {
 	var tailer *tail.Tail
 	if logfilePath != "" {
 		var err error
@@ -458,12 +233,12 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal, 
 			return nil, err
 		}
 	}
-	return &PostfixExporter{
+	return &LogCollector{
 		logUnsupportedLines: logUnsupportedLines,
-		showqPath:           showqPath,
 		tailer:              tailer,
 		journal:             journal,
 
+		postfixUp: postfixUp,
 		cleanupProcesses: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "postfix",
 			Name:      "cleanup_messages_processed_total",
@@ -608,36 +383,7 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal, 
 	}, nil
 }
 
-// Describe the Prometheus metrics that are going to be exported.
-func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
-	ch <- postfixUpDesc
-
-	ch <- e.cleanupProcesses.Desc()
-	ch <- e.cleanupRejects.Desc()
-	ch <- e.cleanupNotAccepted.Desc()
-	e.lmtpDelays.Describe(ch)
-	e.pipeDelays.Describe(ch)
-	ch <- e.qmgrInsertsNrcpt.Desc()
-	ch <- e.qmgrInsertsSize.Desc()
-	ch <- e.qmgrRemoves.Desc()
-	e.smtpDelays.Describe(ch)
-	e.smtpTLSConnects.Describe(ch)
-	ch <- e.smtpDeferreds.Desc()
-	ch <- e.smtpdConnects.Desc()
-	ch <- e.smtpdDisconnects.Desc()
-	ch <- e.smtpdFCrDNSErrors.Desc()
-	e.smtpdLostConnections.Describe(ch)
-	e.smtpdProcesses.Describe(ch)
-	e.smtpdRejects.Describe(ch)
-	ch <- e.smtpdSASLAuthenticationFailures.Desc()
-	e.smtpdTLSConnects.Describe(ch)
-	ch <- e.smtpStatusDeferred.Desc()
-	e.unsupportedLogEntries.Describe(ch)
-	e.smtpConnectionTimedOut.Describe(ch)
-	e.opendkimSignatureAdded.Describe(ch)
-}
-
-func (e *PostfixExporter) foreverCollectFromJournal(ctx context.Context) {
+func (e *LogCollector) foreverCollectFromJournal(ctx context.Context) {
 	gauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "postfix",
@@ -661,7 +407,7 @@ func (e *PostfixExporter) foreverCollectFromJournal(ctx context.Context) {
 	}
 }
 
-func (e *PostfixExporter) StartMetricCollection(ctx context.Context) <-chan interface{} {
+func (e *LogCollector)  StartMetricCollection(ctx context.Context) <-chan interface{} {
 	done := make(chan interface{})
 	go func() {
 		defer close(done)
@@ -671,57 +417,59 @@ func (e *PostfixExporter) StartMetricCollection(ctx context.Context) <-chan inte
 			e.CollectLogfileFromFile(ctx)
 		}
 	}()
-
-	prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "postfix",
-			Subsystem: "",
-			Name:      "up",
-			Help:      "Whether scraping Postfix's metrics was successful.",
-		},
-		[]string{"path"})
 	return done
 }
 
-// Collect metrics from Postfix's showq socket and its log file.
-func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
-	err := CollectShowqFromSocket(e.showqPath, ch)
-	if err == nil {
-		ch <- prometheus.MustNewConstMetric(
-			postfixUpDesc,
-			prometheus.GaugeValue,
-			1.0,
-			e.showqPath)
-	} else {
-		log.Printf("Failed to scrape showq socket: %s", err)
-		ch <- prometheus.MustNewConstMetric(
-			postfixUpDesc,
-			prometheus.GaugeValue,
-			0.0,
-			e.showqPath)
-	}
+// Describe the Prometheus metrics that are going to be exported.
+func (e *LogCollector) Describe(ch chan<- *prometheus.Desc) {
+	e.cleanupProcesses.Describe(ch)
+	e.cleanupRejects.Describe(ch)
+	e.cleanupNotAccepted.Describe(ch)
+	e.lmtpDelays.Describe(ch)
+	e.pipeDelays.Describe(ch)
+	e.qmgrInsertsNrcpt.Describe(ch)
+	e.qmgrInsertsSize.Describe(ch)
+	e.qmgrRemoves.Describe(ch)
+	e.smtpDelays.Describe(ch)
+	e.smtpTLSConnects.Describe(ch)
+	e.smtpDeferreds.Describe(ch)
+	e.smtpdConnects.Describe(ch)
+	e.smtpdDisconnects.Describe(ch)
+	e.smtpdFCrDNSErrors.Describe(ch)
+	e.smtpdLostConnections.Describe(ch)
+	e.smtpdProcesses.Describe(ch)
+	e.smtpdRejects.Describe(ch)
+	e.smtpdSASLAuthenticationFailures.Describe(ch)
+	e.smtpdTLSConnects.Describe(ch)
+	e.smtpStatusDeferred.Describe(ch)
+	e.unsupportedLogEntries.Describe(ch)
+	e.smtpConnectionTimedOut.Describe(ch)
+	e.opendkimSignatureAdded.Describe(ch)
+}
 
-	ch <- e.cleanupProcesses
-	ch <- e.cleanupRejects
-	ch <- e.cleanupNotAccepted
+// Collect metrics from Postfix's showq socket and its log file.
+func (e *LogCollector) Collect(ch chan<- prometheus.Metric) {
+	e.cleanupProcesses.Collect(ch)
+	e.cleanupRejects.Collect(ch)
+	e.cleanupNotAccepted.Collect(ch)
 	e.lmtpDelays.Collect(ch)
 	e.pipeDelays.Collect(ch)
-	ch <- e.qmgrInsertsNrcpt
-	ch <- e.qmgrInsertsSize
-	ch <- e.qmgrRemoves
+	e.qmgrInsertsNrcpt.Collect(ch)
+	e.qmgrInsertsSize.Collect(ch)
+	e.qmgrRemoves.Collect(ch)
 	e.smtpDelays.Collect(ch)
 	e.smtpTLSConnects.Collect(ch)
-	ch <- e.smtpDeferreds
-	ch <- e.smtpdConnects
-	ch <- e.smtpdDisconnects
-	ch <- e.smtpdFCrDNSErrors
+	e.smtpDeferreds.Collect(ch)
+	e.smtpdConnects.Collect(ch)
+	e.smtpdDisconnects.Collect(ch)
+	e.smtpdFCrDNSErrors.Collect(ch)
 	e.smtpdLostConnections.Collect(ch)
 	e.smtpdProcesses.Collect(ch)
 	e.smtpdRejects.Collect(ch)
-	ch <- e.smtpdSASLAuthenticationFailures
+	e.smtpdSASLAuthenticationFailures.Collect(ch)
 	e.smtpdTLSConnects.Collect(ch)
-	ch <- e.smtpStatusDeferred
+	e.smtpStatusDeferred.Collect(ch)
 	e.unsupportedLogEntries.Collect(ch)
-	ch <- e.smtpConnectionTimedOut
+	e.smtpConnectionTimedOut.Collect(ch)
 	e.opendkimSignatureAdded.Collect(ch)
 }
