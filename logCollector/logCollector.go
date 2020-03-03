@@ -214,7 +214,6 @@ func (e *LogCollector) CollectLogfileFromFile(ctx context.Context) {
 			gauge.Set(0)
 			return
 		}
-		gauge.Set(1)
 	}
 }
 
@@ -395,15 +394,15 @@ func (e *LogCollector) foreverCollectFromJournal(ctx context.Context) {
 		[]string{"path"}).WithLabelValues(e.journal.Path)
 	select {
 	case <-ctx.Done():
-		gauge.Set(0)
+		e.postfixUp.WithLabelValues(e.journal.Path).Set(0)
 		return
 	default:
 		err := e.CollectLogfileFromJournal()
 		if err != nil {
 			log.Printf("Couldn't read journal: %v", err)
-			gauge.Set(0)
+			e.postfixUp.WithLabelValues(e.journal.Path).Set(0)
 		} else {
-			gauge.Set(1)
+			e.postfixUp.WithLabelValues(e.journal.Path).Set(1)
 		}
 	}
 }
