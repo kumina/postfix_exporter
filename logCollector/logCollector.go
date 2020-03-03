@@ -384,14 +384,6 @@ func NewLogCollector(logfilePath string, journal *Journal, logUnsupportedLines b
 }
 
 func (e *LogCollector) foreverCollectFromJournal(ctx context.Context) {
-	gauge := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "postfix",
-			Subsystem: "",
-			Name:      "up",
-			Help:      "Whether scraping Postfix's metrics was successful.",
-		},
-		[]string{"path"}).WithLabelValues(e.journal.Path)
 	select {
 	case <-ctx.Done():
 		e.postfixUp.WithLabelValues(e.journal.Path).Set(0)
