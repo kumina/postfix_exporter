@@ -23,7 +23,7 @@ func (m *HistogramVecMock) With(prometheus.Labels) prometheus.Observer {
 }
 
 func (m *HistogramVecMock) WithLabelValues(...string) prometheus.Observer {
-	return m.mock
+	return &m.mock
 }
 
 func (m *HistogramVecMock) CurryWith(prometheus.Labels) (prometheus.ObserverVec, error) {
@@ -38,7 +38,11 @@ func (m *HistogramVecMock) Collect(chan<- prometheus.Metric) {
 	panic("implement me")
 }
 func (m *HistogramVecMock) GetSum() float64 {
-	return *m.mock.sum
+	return m.mock.sum
+}
+
+func (m *HistogramVecMock) GetCount() int {
+	return m.mock.count
 }
 
 func NewHistogramVecMock() *HistogramVecMock {

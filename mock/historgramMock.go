@@ -6,11 +6,12 @@ import (
 )
 
 type HistogramMock struct {
-	sum *float64
+	sum   float64
+	count int
 }
 
 func NewHistogramMock() *HistogramMock {
-	return &HistogramMock{sum: new(float64)}
+	return &HistogramMock{}
 }
 
 func (HistogramMock) Desc() *prometheus.Desc {
@@ -29,6 +30,7 @@ func (HistogramMock) Collect(chan<- prometheus.Metric) {
 	panic("implement me")
 }
 
-func (h HistogramMock) Observe(value float64) {
-	*h.sum += value
+func (h *HistogramMock) Observe(value float64) {
+	h.sum += value
+	h.count++
 }

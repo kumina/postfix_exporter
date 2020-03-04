@@ -78,3 +78,7 @@ C9C4A20501*    5099 Mon Feb 24 13:14:10  sender@example.com
 06373212DC     4088 Sat Feb 22 00:34:11  sender@example.com
            (connect to smtp.falun.se[192.121.234.25]:25: Connection timed out)
                                          recipient@utb.falun.se
+
+06373212DD!     4088 Sat Dec 31 23:59:59  sender@example.com
+           (connect to smtp.falun.se[192.121.234.25]:25: Connection timed out)
+                                         recipient@utb.falun.se

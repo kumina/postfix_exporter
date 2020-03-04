@@ -23,7 +23,8 @@ func TestCollectShowqFromReader(t *testing.T) {
 		name               string
 		args               args
 		wantErr            bool
-		expectedTotalCount float64
+		expectedTotalSize  float64
+		expectedTotalCount int
 	}{
 		{
 			name: "basic test",
@@ -31,7 +32,8 @@ func TestCollectShowqFromReader(t *testing.T) {
 				file: "testdata/showq.txt",
 			},
 			wantErr:            false,
-			expectedTotalCount: 118702,
+			expectedTotalCount: 25,
+			expectedTotalSize:  122790,
 		},
 	}
 	for _, tt := range tests {
@@ -40,8 +42,9 @@ func TestCollectShowqFromReader(t *testing.T) {
 
 			socket, ch, err := writeToSocket(ctx, tt.args.file)
 			if err != nil {
-				t.Error(err)
+				t.Errorf("failed to write to socket: %v", err)
 			}
+			defer cancelFunc()
 
 			sizeHistogram := mock.NewHistogramVecMock()
 			ageHistogram := mock.NewHistogramVecMock()
@@ -51,7 +54,8 @@ func TestCollectShowqFromReader(t *testing.T) {
 			if err := showQ.CollectShowqFromSocket(socket); (err != nil) != tt.wantErr {
 				t.Errorf("CollectShowqFromSocket() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			assert.Equal(t, tt.expectedTotalCount, sizeHistogram.GetSum(), "Expected a lot more data.")
+			assert.Equal(t, tt.expectedTotalSize, sizeHistogram.GetSum(), "Expected a lot more data.")
+			assert.Equal(t, tt.expectedTotalCount, sizeHistogram.GetCount(), "Wrong number of points counted.")
 			assert.Less(t, 0.0, ageHistogram.GetSum(), "Age not greater than 0")
 			cancelFunc()
 			<-ch
