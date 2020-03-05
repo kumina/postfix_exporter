@@ -173,7 +173,6 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &LogCollector{
 				journal:                         tt.fields.journal,
-				tailer:                          tt.fields.tailer,
 				cleanupProcesses:                tt.fields.cleanupProcesses,
 				cleanupRejects:                  tt.fields.cleanupRejects,
 				cleanupNotAccepted:              tt.fields.cleanupNotAccepted,

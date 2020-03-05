@@ -117,3 +117,27 @@ func (e *LogCollector) CollectLogfileFromJournal() error {
 
 	return nil
 }
+
+// CollectLogfileFromJournal Collects entries from the systemd journal.
+func (e *LogCollector) CollectLogLinesFromJournal() (<-chan string, error) {
+	e.journal.Lock()
+	defer e.journal.Unlock()
+	lines := make(chan string)
+
+	r := e.journal.Wait(time.Duration(1) * time.Second)
+	if r < 0 {
+		log.Print("error while waiting for journal!")
+	}
+	for {
+		m, c, err := e.journal.NextMessage()
+		if err != nil {
+			return nil, err
+		}
+		if c == 0 {
+			break
+		}
+		lines <- m
+	}
+
+	return lines, nil
+}

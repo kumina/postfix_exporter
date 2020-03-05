@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/alecthomas/kingpin"
+	"github.com/hpcloud/tail"
 	"github.com/kumina/postfix_exporter/logCollector"
 	"github.com/kumina/postfix_exporter/showq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -55,7 +59,7 @@ func main() {
 	showQ := showq.NewShowQCollector(*postfixShowqPath, postfixUp, *postfixShowqInterval)
 	prometheus.MustRegister(showQ)
 
-	logFileCollector, err := logCollector.NewLogCollector(*postfixLogfilePath, journal, *logUnsupportedLines, postfixUp)
+	logFileCollector, err := logCollector.NewLogCollector(journal, *logUnsupportedLines, postfixUp)
 	if err != nil {
 		log.Fatalf("Failed to create LogCollector: %s", err)
 	}
@@ -77,7 +81,16 @@ func main() {
 	})
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
-	logCollectionDone := logFileCollector.StartMetricCollection(ctx)
+	var logLines <-chan string
+	if journal == nil {
+		logLines, err = tailLog(ctx, *postfixLogfilePath)
+		if err != nil {
+			logrus.Errorf("Failed to start tailing the logfile %s: %v", *postfixLogfilePath, err)
+		}
+	} else {
+	}
+
+	logCollectionDone := logFileCollector.StartMetricCollection(ctx, logLines)
 	showqCollectionDone, err := showQ.StartMetricCollection(ctx)
 	if err != nil {
 		log.Printf("failed to start showq metrics collection: %v", err)
@@ -110,6 +123,41 @@ func main() {
 	cancelFunc()
 	<-logCollectionDone
 	<-showqCollectionDone
-	log.Print("Shutdown completed")
+	logrus.Print("Shutdown completed")
 	os.Exit(0)
+}
+
+func tailLog(ctx context.Context, filename string) (<-chan string, error) {
+	tailer, err := tail.TailFile(filename, tail.Config{
+		ReOpen:    true,                               // reopen the file if it's rotated
+		MustExist: true,                               // fail immediately if the file is missing or has incorrect permissions
+		Follow:    true,                               // run in follow mode
+		Location:  &tail.SeekInfo{Whence: io.SeekEnd}, // seek to end of file
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to start tailer: %v", err)
+	}
+	lines := make(chan string)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				err := tailer.Stop()
+				logrus.Printf("failed to stop tailing: %v", err)
+				close(lines)
+				return
+			case line, ok := <-tailer.Lines:
+				if !ok {
+					logrus.Printf("tailer seems to be finished.")
+					close(lines)
+					return
+				}
+				if line.Err != nil {
+					logrus.Printf("failed to receive line: %v", line.Err)
+				}
+				lines <- line.Text
+			}
+		}
+	}()
+	return lines, nil
 }

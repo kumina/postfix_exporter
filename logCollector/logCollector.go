@@ -15,10 +15,9 @@ package logCollector
 
 import (
 	"context"
-	"github.com/hpcloud/tail"
 	"github.com/kumina/postfix_exporter/showq"
 	"github.com/prometheus/client_golang/prometheus"
-	"io"
+	"github.com/sirupsen/logrus"
 	"log"
 	"regexp"
 	"strconv"
@@ -29,7 +28,6 @@ import (
 // Postfix Prometheus metrics exporter across scrapes.
 type LogCollector struct {
 	journal             *Journal
-	tailer              *tail.Tail
 	logUnsupportedLines bool
 
 	// Metrics that should persist after refreshes, based on logs.
@@ -203,39 +201,28 @@ func addToHistogramVec(h *prometheus.HistogramVec, value, fieldName string, labe
 	h.WithLabelValues(labels...).Observe(float)
 }
 
-// CollectLogfileFromFile tails a Postfix log file and collects entries from it.
-func (e *LogCollector) CollectLogfileFromFile(ctx context.Context) {
-	gauge := e.postfixUp.WithLabelValues(e.tailer.Filename)
+// CollectLogFromChannel tails a Postfix log file and collects entries from it.
+func (e *LogCollector) CollectLogFromChannel(ctx context.Context, lines <-chan string) {
 	for {
 		select {
-		case line := <-e.tailer.Lines:
-			e.CollectFromLogLine(line.Text)
+		case line, ok := <-lines:
+			if !ok {
+				logrus.Info("Lines channel closed, stopping to process lines")
+				return
+			}
+			e.CollectFromLogLine(line)
 		case <-ctx.Done():
-			gauge.Set(0)
+			logrus.Info("Context closed, stopping to process lines")
 			return
 		}
 	}
 }
 
 // NewLogCollector creates a new Postfix exporter instance.
-func NewLogCollector(logfilePath string, journal *Journal, logUnsupportedLines bool, postfixUp showq.GaugeVec) (*LogCollector, error) {
-	var tailer *tail.Tail
-	if logfilePath != "" {
-		var err error
-		tailer, err = tail.TailFile(logfilePath, tail.Config{
-			ReOpen:    true,                               // reopen the file if it's rotated
-			MustExist: true,                               // fail immediately if the file is missing or has incorrect permissions
-			Follow:    true,                               // run in follow mode
-			Location:  &tail.SeekInfo{Whence: io.SeekEnd}, // seek to end of file
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
+func NewLogCollector(journal *Journal, logUnsupportedLines bool, postfixUp showq.GaugeVec) (*LogCollector, error) {
 	timeBuckets := []float64{1e-3, 1e-2, 1e-1, 1.0, 10, 1 * 60, 1 * 60 * 60, 24 * 60 * 60, 2 * 24 * 60 * 60}
 	return &LogCollector{
 		logUnsupportedLines: logUnsupportedLines,
-		tailer:              tailer,
 		journal:             journal,
 
 		postfixUp: postfixUp,
@@ -399,14 +386,14 @@ func (e *LogCollector) foreverCollectFromJournal(ctx context.Context) {
 	}
 }
 
-func (e *LogCollector) StartMetricCollection(ctx context.Context) <-chan interface{} {
+func (e *LogCollector) StartMetricCollection(ctx context.Context, lines <-chan string) <-chan interface{} {
 	done := make(chan interface{})
 	go func() {
 		defer close(done)
 		if e.journal != nil {
 			e.foreverCollectFromJournal(ctx)
 		} else {
-			e.CollectLogfileFromFile(ctx)
+			e.CollectLogFromChannel(ctx, lines)
 		}
 	}()
 	return done
