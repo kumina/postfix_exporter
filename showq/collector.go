@@ -11,6 +11,7 @@ import (
 	"net"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,7 +27,12 @@ type ShowQ struct {
 	ageHistogram   prometheus.ObserverVec
 	upGauge        GaugeVec
 	scrapeInterval string
+	mu             sync.RWMutex
 }
+
+const queueOther = "other"
+const queueHold = "hold"
+const queueActive = "active"
 
 func NewShowQCollector(path string, upGauge GaugeVec, interval string) *ShowQ {
 	return &ShowQ{
@@ -68,18 +74,25 @@ func (s *ShowQ) StartMetricCollection(ctx context.Context) (<-chan interface{}, 
 				gauge.Set(0)
 				return
 			case <-ticker.C:
-				err := s.CollectShowqFromSocket(s.path)
-				if err == nil {
-					gauge.Set(1)
-				} else {
-					log.Printf("Failed to scrape showq socket: %s", err)
-					gauge.Set(0)
-				}
+				s.collectMetrics(gauge)
 			}
 		}
 
 	}()
 	return done, nil
+}
+
+func (s *ShowQ) collectMetrics(gauge prometheus.Gauge) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.resetHistograms()
+	err := s.CollectShowqFromSocket(s.path)
+	if err == nil {
+		gauge.Set(1)
+	} else {
+		log.Printf("Failed to scrape showq socket: %s", err)
+		gauge.Set(0)
+	}
 }
 
 func (s ShowQ) Describe(ch chan<- *prometheus.Desc) {
@@ -88,6 +101,8 @@ func (s ShowQ) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (s ShowQ) Collect(ch chan<- prometheus.Metric) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	s.sizeHistogram.Collect(ch)
 	s.ageHistogram.Collect(ch)
 }
@@ -126,7 +141,8 @@ func (s ShowQ) CollectTextualShowqFromScanner(file io.Reader) error {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
 	// Initialize all queue buckets to zero.
-	for _, q := range []string{"active", "hold", "other"} {
+
+	for _, q := range []string{queueActive, queueHold, queueOther} {
 		s.sizeHistogram.WithLabelValues(q)
 		s.ageHistogram.WithLabelValues(q)
 	}
@@ -151,11 +167,11 @@ func (s ShowQ) CollectTextualShowqFromScanner(file io.Reader) error {
 		dateMatch := matches[3]
 
 		// Derive the name of the message queue.
-		queue := "other"
+		queue := queueOther
 		if queueMatch == "*" {
-			queue = "active"
+			queue = queueActive
 		} else if queueMatch == "!" {
-			queue = "hold"
+			queue = queueHold
 		}
 
 		// Parse the message size.
@@ -264,4 +280,20 @@ func (s ShowQ) collectBinaryShowqFromReader(file io.Reader) error {
 	}
 
 	return scanner.Err()
+}
+
+// Since every time we poll showq we get a complete state, we need to reset the Histogram. This should be reasonably quick
+func (s *ShowQ) resetHistograms() {
+	switch s.sizeHistogram.(type) {
+	case *prometheus.HistogramVec:
+		for _, q := range []string{queueActive, queueHold, queueOther} {
+			s.sizeHistogram.(*prometheus.HistogramVec).DeleteLabelValues(q)
+		}
+	}
+	switch s.ageHistogram.(type) {
+	case *prometheus.HistogramVec:
+		for _, q := range []string{queueActive, queueHold, queueOther} {
+			s.ageHistogram.(*prometheus.HistogramVec).DeleteLabelValues(q)
+		}
+	}
 }
