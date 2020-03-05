@@ -15,13 +15,14 @@ package logCollector
 
 import (
 	"context"
-	"github.com/kumina/postfix_exporter/showq"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	"log"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/kumina/postfix_exporter/showq"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 // LogCollector holds the state that should be preserved by the

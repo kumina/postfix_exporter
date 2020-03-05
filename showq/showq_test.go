@@ -5,14 +5,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/kumina/postfix_exporter/mock"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"path"
 	"testing"
+
+	"github.com/kumina/postfix_exporter/mock"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCollectShowqFromReader(t *testing.T) {

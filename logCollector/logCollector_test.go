@@ -1,11 +1,12 @@
 package logCollector
 
 import (
+	"testing"
+
 	"github.com/hpcloud/tail"
 	"github.com/prometheus/client_golang/prometheus"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestPostfixExporter_CollectFromLogline(t *testing.T) {

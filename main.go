@@ -3,6 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"time"
+
 	"github.com/alecthomas/kingpin"
 	"github.com/hpcloud/tail"
 	"github.com/kumina/postfix_exporter/logCollector"
@@ -10,12 +17,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
-	"io"
-	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"time"
 )
 
 func main() {
