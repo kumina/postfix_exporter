@@ -20,8 +20,9 @@ type Journal struct {
 }
 
 // NewJournal returns a Journal for reading journal entries.
-func NewJournal(unit, slice, path string) (j *Journal, err error) {
-	j = new(Journal)
+func NewJournal(unit, slice, path string) (*Journal, error) {
+	j := new(Journal)
+	var err error
 	if path != "" {
 		j.Journal, err = sdjournal.NewJournalFromDir(path)
 		j.Path = path
@@ -30,27 +31,27 @@ func NewJournal(unit, slice, path string) (j *Journal, err error) {
 		j.Path = "journald"
 	}
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to open journal: %v", err)
 	}
 
 	if slice != "" {
 		err = j.AddMatch("_SYSTEMD_SLICE=" + slice)
 		if err != nil {
-			return
+			return nil, fmt.Errorf("failed to add match for slice: %v", err)
 		}
 	} else if unit != "" {
 		err = j.AddMatch("_SYSTEMD_UNIT=" + unit)
 		if err != nil {
-			return
+			return nil, fmt.Errorf("failed to add match for unit: %v", err)
 		}
 	}
 
 	// Start at end of journal
 	err = j.SeekRealtimeUsec(uint64(time.Now().UnixNano() / 1000))
 	if err != nil {
-		log.Printf("%v", err)
+		return nil, fmt.Errorf("failed to seek to end: %v", err)
 	}
-	return
+	return j, nil
 }
 
 // NextMessage reads the next message from the journal.
@@ -119,17 +120,17 @@ func (e *LogCollector) CollectLogfileFromJournal() error {
 }
 
 // CollectLogfileFromJournal Collects entries from the systemd journal.
-func (e *LogCollector) CollectLogLinesFromJournal() (<-chan string, error) {
-	e.journal.Lock()
-	defer e.journal.Unlock()
+func (j *Journal) CollectLogLinesFromJournal() (<-chan string, error) {
+	j.Lock()
+	defer j.Unlock()
 	lines := make(chan string)
 
-	r := e.journal.Wait(time.Duration(1) * time.Second)
+	r := j.Wait(time.Duration(1) * time.Second)
 	if r < 0 {
 		log.Print("error while waiting for journal!")
 	}
 	for {
-		m, c, err := e.journal.NextMessage()
+		m, c, err := j.NextMessage()
 		if err != nil {
 			return nil, err
 		}
