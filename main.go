@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -11,9 +9,10 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin"
-	"github.com/hpcloud/tail"
+	journal2 "github.com/kumina/postfix_exporter/journal"
 	"github.com/kumina/postfix_exporter/logCollector"
 	"github.com/kumina/postfix_exporter/showq"
+	"github.com/kumina/postfix_exporter/tailer"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
@@ -31,14 +30,14 @@ func main() {
 		systemdEnable                                 bool
 		systemdUnit, systemdSlice, systemdJournalPath string
 	)
-	logCollector.SystemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath, app)
+	journal2.SystemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath, app)
 
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
-	var journal *logCollector.Journal
+	var journal *journal2.Journal
 	if systemdEnable {
 		var err error
-		journal, err = logCollector.NewJournal(systemdUnit, systemdSlice, systemdJournalPath)
+		journal, err = journal2.NewJournal(systemdUnit, systemdSlice, systemdJournalPath)
 		if err != nil {
 			log.Fatalf("Error opening systemd journal: %s", err)
 		}
@@ -86,7 +85,7 @@ func main() {
 	var logLines <-chan string
 
 	if journal == nil {
-		logLines, err = tailLog(ctx, *postfixLogfilePath)
+		logLines, err = tailer.TailLog(ctx, *postfixLogfilePath)
 		if err != nil {
 			logrus.Errorf("Failed to start tailing the logfile %s: %v", *postfixLogfilePath, err)
 		}
@@ -129,51 +128,4 @@ func main() {
 	<-showqCollectionDone
 	logrus.Print("Shutdown completed")
 	os.Exit(0)
-}
-
-type tailer struct {
-}
-
-func tailLog(ctx context.Context, filename string) (<-chan string, error) {
-	tailer, err := tail.TailFile(filename, tail.Config{
-		ReOpen:    true,                               // reopen the file if it's rotated
-		MustExist: true,                               // fail immediately if the file is missing or has incorrect permissions
-		Follow:    true,                               // run in follow mode
-		Location:  &tail.SeekInfo{Whence: io.SeekEnd}, // seek to end of file
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to start tailer: %v", err)
-	}
-	lines := make(chan string)
-	go func() {
-		counter := prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   "postfix_exporter",
-			Subsystem:   "",
-			Name:        "lines_collected",
-			Help:        "Number of lines collected by PostfixExporter",
-			ConstLabels: prometheus.Labels{"source": "tailer"},
-		})
-		prometheus.MustRegister(counter)
-		for {
-			select {
-			case <-ctx.Done():
-				err := tailer.Stop()
-				logrus.Printf("failed to stop tailing: %v", err)
-				close(lines)
-				return
-			case line, ok := <-tailer.Lines:
-				if !ok {
-					logrus.Printf("tailer seems to be finished.")
-					close(lines)
-					return
-				}
-				if line.Err != nil {
-					logrus.Printf("failed to receive line: %v", line.Err)
-				}
-				counter.Inc()
-				lines <- line.Text
-			}
-		}
-	}()
-	return lines, nil
 }

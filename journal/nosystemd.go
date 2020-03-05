@@ -1,7 +1,7 @@
 // +build nosystemd !linux
 // This file contains stubs to support non-systemd use
 
-package logCollector
+package journal
 
 import (
 	"context"

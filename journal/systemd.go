@@ -1,6 +1,6 @@
 // +build !nosystemd,linux
 
-package logCollector
+package journal
 
 import (
 	"context"
