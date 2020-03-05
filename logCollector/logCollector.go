@@ -220,13 +220,11 @@ func (e *LogCollector) CollectLogFromChannel(ctx context.Context, lines <-chan s
 }
 
 // NewLogCollector creates a new Postfix exporter instance.
-func NewLogCollector(journal *Journal, logUnsupportedLines bool, postfixUp showq.GaugeVec) (*LogCollector, error) {
+func NewLogCollector(logUnsupportedLines bool, postfixUp showq.GaugeVec) (*LogCollector, error) {
 	timeBuckets := []float64{1e-3, 1e-2, 1e-1, 1.0, 10, 1 * 60, 1 * 60 * 60, 24 * 60 * 60, 2 * 24 * 60 * 60}
 	return &LogCollector{
 		logUnsupportedLines: logUnsupportedLines,
-		journal:             journal,
-
-		postfixUp: postfixUp,
+		postfixUp:           postfixUp,
 		cleanupProcesses: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "postfix",
 			Name:      "cleanup_messages_processed_total",
@@ -371,31 +369,11 @@ func NewLogCollector(journal *Journal, logUnsupportedLines bool, postfixUp showq
 	}, nil
 }
 
-func (e *LogCollector) foreverCollectFromJournal(ctx context.Context) {
-	select {
-	case <-ctx.Done():
-		e.postfixUp.WithLabelValues(e.journal.Path).Set(0)
-		return
-	default:
-		err := e.CollectLogfileFromJournal()
-		if err != nil {
-			log.Printf("Couldn't read journal: %v", err)
-			e.postfixUp.WithLabelValues(e.journal.Path).Set(0)
-		} else {
-			e.postfixUp.WithLabelValues(e.journal.Path).Set(1)
-		}
-	}
-}
-
 func (e *LogCollector) StartMetricCollection(ctx context.Context, lines <-chan string) <-chan interface{} {
 	done := make(chan interface{})
 	go func() {
 		defer close(done)
-		if e.journal != nil {
-			e.foreverCollectFromJournal(ctx)
-		} else {
-			e.CollectLogFromChannel(ctx, lines)
-		}
+		e.CollectLogFromChannel(ctx, lines)
 	}()
 	return done
 }

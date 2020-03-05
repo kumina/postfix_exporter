@@ -43,6 +43,7 @@ func main() {
 			log.Fatalf("Error opening systemd journal: %s", err)
 		}
 		defer journal.Close()
+		prometheus.MustRegister(journal)
 		log.Println("Reading log events from systemd")
 	} else {
 		log.Printf("Reading log events from %v", *postfixLogfilePath)
@@ -60,7 +61,7 @@ func main() {
 	showQ := showq.NewShowQCollector(*postfixShowqPath, postfixUp, *postfixShowqInterval)
 	prometheus.MustRegister(showQ)
 
-	logFileCollector, err := logCollector.NewLogCollector(journal, *logUnsupportedLines, postfixUp)
+	logFileCollector, err := logCollector.NewLogCollector(*logUnsupportedLines, postfixUp)
 	if err != nil {
 		log.Fatalf("Failed to create LogCollector: %s", err)
 	}
@@ -83,12 +84,14 @@ func main() {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
 	var logLines <-chan string
+
 	if journal == nil {
 		logLines, err = tailLog(ctx, *postfixLogfilePath)
 		if err != nil {
 			logrus.Errorf("Failed to start tailing the logfile %s: %v", *postfixLogfilePath, err)
 		}
 	} else {
+		logLines, err = journal.CollectLogLinesFromJournal(ctx)
 	}
 
 	logCollectionDone := logFileCollector.StartMetricCollection(ctx, logLines)
@@ -128,6 +131,9 @@ func main() {
 	os.Exit(0)
 }
 
+type tailer struct {
+}
+
 func tailLog(ctx context.Context, filename string) (<-chan string, error) {
 	tailer, err := tail.TailFile(filename, tail.Config{
 		ReOpen:    true,                               // reopen the file if it's rotated
@@ -140,6 +146,14 @@ func tailLog(ctx context.Context, filename string) (<-chan string, error) {
 	}
 	lines := make(chan string)
 	go func() {
+		counter := prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   "postfix_exporter",
+			Subsystem:   "",
+			Name:        "lines_collected",
+			Help:        "Number of lines collected by PostfixExporter",
+			ConstLabels: prometheus.Labels{"source": "tailer"},
+		})
+		prometheus.MustRegister(counter)
 		for {
 			select {
 			case <-ctx.Done():
@@ -156,6 +170,7 @@ func tailLog(ctx context.Context, filename string) (<-chan string, error) {
 				if line.Err != nil {
 					logrus.Printf("failed to receive line: %v", line.Err)
 				}
+				counter.Inc()
 				lines <- line.Text
 			}
 		}

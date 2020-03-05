@@ -3,7 +3,6 @@ package logCollector
 import (
 	"testing"
 
-	"github.com/hpcloud/tail"
 	"github.com/prometheus/client_golang/prometheus"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
@@ -11,9 +10,6 @@ import (
 
 func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 	type fields struct {
-		showqPath                       string
-		journal                         *Journal
-		tailer                          *tail.Tail
 		cleanupProcesses                prometheus.Counter
 		cleanupRejects                  prometheus.Counter
 		cleanupNotAccepted              prometheus.Counter
@@ -173,7 +169,6 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &LogCollector{
-				journal:                         tt.fields.journal,
 				cleanupProcesses:                tt.fields.cleanupProcesses,
 				cleanupRejects:                  tt.fields.cleanupRejects,
 				cleanupNotAccepted:              tt.fields.cleanupNotAccepted,

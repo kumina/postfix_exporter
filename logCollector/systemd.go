@@ -3,6 +3,7 @@
 package logCollector
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -10,24 +11,43 @@ import (
 
 	"github.com/alecthomas/kingpin"
 	"github.com/coreos/go-systemd/v22/sdjournal"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 // Journal represents a lockable systemd journal.
 type Journal struct {
-	*sdjournal.Journal
-	sync.Mutex
-	Path string
+	journal             *sdjournal.Journal
+	mu                  sync.Mutex
+	Path                string
+	linesCollectedGauge prometheus.Counter
+}
+
+func (j *Journal) Describe(ch chan<- *prometheus.Desc) {
+	j.linesCollectedGauge.Describe(ch)
+}
+
+func (j *Journal) Collect(ch chan<- prometheus.Metric) {
+	j.linesCollectedGauge.Collect(ch)
 }
 
 // NewJournal returns a Journal for reading journal entries.
 func NewJournal(unit, slice, path string) (*Journal, error) {
-	j := new(Journal)
+	j := &Journal{
+		linesCollectedGauge: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   "postfix_exporter",
+			Subsystem:   "",
+			Name:        "lines_collected",
+			Help:        "Number of lines collected by PostfixExporter",
+			ConstLabels: prometheus.Labels{"source": "journald"},
+		}),
+	}
 	var err error
 	if path != "" {
-		j.Journal, err = sdjournal.NewJournalFromDir(path)
+		j.journal, err = sdjournal.NewJournalFromDir(path)
 		j.Path = path
 	} else {
-		j.Journal, err = sdjournal.NewJournal()
+		j.journal, err = sdjournal.NewJournal()
 		j.Path = "journald"
 	}
 	if err != nil {
@@ -35,19 +55,19 @@ func NewJournal(unit, slice, path string) (*Journal, error) {
 	}
 
 	if slice != "" {
-		err = j.AddMatch("_SYSTEMD_SLICE=" + slice)
+		err = j.journal.AddMatch("_SYSTEMD_SLICE=" + slice)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add match for slice: %v", err)
 		}
 	} else if unit != "" {
-		err = j.AddMatch("_SYSTEMD_UNIT=" + unit)
+		err = j.journal.AddMatch("_SYSTEMD_UNIT=" + unit)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add match for unit: %v", err)
 		}
 	}
 
 	// Start at end of journal
-	err = j.SeekRealtimeUsec(uint64(time.Now().UnixNano() / 1000))
+	err = j.journal.SeekRealtimeUsec(uint64(time.Now().UnixNano() / 1000))
 	if err != nil {
 		return nil, fmt.Errorf("failed to seek to end: %v", err)
 	}
@@ -59,7 +79,7 @@ func (j *Journal) NextMessage() (s string, c uint64, err error) {
 	var e *sdjournal.JournalEntry
 
 	// Read to next
-	c, err = j.Next()
+	c, err = j.journal.Next()
 	if err != nil {
 		return
 	}
@@ -69,7 +89,7 @@ func (j *Journal) NextMessage() (s string, c uint64, err error) {
 	}
 
 	// Get entry
-	e, err = j.GetEntry()
+	e, err = j.journal.GetEntry()
 	if err != nil {
 		return
 	}
@@ -97,48 +117,44 @@ func SystemdFlags(enable *bool, unit, slice, path *string, app *kingpin.Applicat
 }
 
 // CollectLogfileFromJournal Collects entries from the systemd journal.
-func (e *LogCollector) CollectLogfileFromJournal() error {
-	e.journal.Lock()
-	defer e.journal.Unlock()
-
-	r := e.journal.Wait(time.Duration(1) * time.Second)
-	if r < 0 {
-		log.Print("error while waiting for journal!")
-	}
-	for {
-		m, c, err := e.journal.NextMessage()
-		if err != nil {
-			return err
-		}
-		if c == 0 {
-			break
-		}
-		e.CollectFromLogLine(m)
-	}
-
-	return nil
-}
-
-// CollectLogfileFromJournal Collects entries from the systemd journal.
-func (j *Journal) CollectLogLinesFromJournal() (<-chan string, error) {
-	j.Lock()
-	defer j.Unlock()
+func (j *Journal) CollectLogLinesFromJournal(ctx context.Context) (<-chan string, error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	lines := make(chan string)
 
-	r := j.Wait(time.Duration(1) * time.Second)
+	r := j.journal.Wait(time.Duration(1) * time.Second)
 	if r < 0 {
 		log.Print("error while waiting for journal!")
 	}
-	for {
-		m, c, err := j.NextMessage()
-		if err != nil {
-			return nil, err
+	go func() {
+		logrus.Info("Started journal tailing.")
+		defer close(lines)
+		for {
+			select {
+			case <-ctx.Done():
+				logrus.Printf("Leaving systemd collection")
+				return
+			default:
+				m, c, err := j.NextMessage()
+				if err != nil {
+					logrus.Printf("failed to get next message: %v", err)
+					return
+				}
+				if c == 0 {
+					j.journal.Wait(time.Duration(1) * time.Second)
+					continue
+				} else {
+					j.linesCollectedGauge.Inc()
+					lines <- m
+				}
+			}
+
 		}
-		if c == 0 {
-			break
-		}
-		lines <- m
-	}
+	}()
 
 	return lines, nil
+}
+
+func (j *Journal) Close() {
+	j.journal.Close()
 }
