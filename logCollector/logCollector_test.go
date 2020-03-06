@@ -9,52 +9,53 @@ import (
 )
 
 func TestPostfixExporter_CollectFromLogline(t *testing.T) {
-	type fields struct {
-		cleanupProcesses                prometheus.Counter
-		cleanupRejects                  prometheus.Counter
-		cleanupNotAccepted              prometheus.Counter
-		lmtpDelays                      *prometheus.HistogramVec
-		pipeDelays                      *prometheus.HistogramVec
-		qmgrInsertsNrcpt                prometheus.Histogram
-		qmgrInsertsSize                 prometheus.Histogram
-		qmgrRemoves                     prometheus.Counter
-		smtpDelays                      *prometheus.HistogramVec
-		smtpTLSConnects                 *prometheus.CounterVec
-		smtpDeferreds                   prometheus.Counter
-		smtpdConnects                   prometheus.Counter
-		smtpdDisconnects                prometheus.Counter
-		smtpdFCrDNSErrors               prometheus.Counter
-		smtpdLostConnections            *prometheus.CounterVec
-		smtpdProcesses                  *prometheus.CounterVec
-		smtpdRejects                    *prometheus.CounterVec
-		smtpdSASLAuthenticationFailures prometheus.Counter
-		smtpdTLSConnects                *prometheus.CounterVec
-		unsupportedLogEntries           *prometheus.CounterVec
-	}
 	type args struct {
 		line                   []string
 		removedCount           int
 		saslFailedCount        int
 		outgoingTLS            int
 		smtpdMessagesProcessed int
+		unsupportedLines       int
+		cleanupProcesses       int
+		cleanupRejects         int
+		cleanupNotAccepted     int
+		lmtpDelays             int
+		pipeDelays             int
+		qmgrInsertsNrcpt       int
+		qmgrInsertsSize        int
+		smtpDelays             int
+		smtpConnectionTimedOut int
+		smtpDeferreds          int
+		smtpdConnects          int
+		smtpdDisconnects       int
+		smtpdFCrDNSErrors      int
+		smtpdLostConnections   int
+		smtpdRejects           int
+		smtpdTLSConnects       int
+		smtpStatusDeferred     int
+		opendkimSignatureAdded int
+		postfixUp              int
 	}
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		name string
+		args args
 	}{
+		{
+			name: "Invalid line",
+			args: args{
+				line: []string{
+					"Whatever",
+				},
+				unsupportedLines: 1,
+			},
+		},
 		{
 			name: "Single line",
 			args: args{
 				line: []string{
 					"Feb 11 16:49:24 letterman postfix/qmgr[8204]: AAB4D259B1: removed",
 				},
-				removedCount:    1,
-				saslFailedCount: 0,
-			},
-			fields: fields{
-				qmgrRemoves:           prometheus.NewCounter(prometheus.CounterOpts{}),
-				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+				removedCount: 1,
 			},
 		},
 		{
@@ -93,12 +94,21 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 					"Feb 11 16:49:27 letterman postfix/qmgr[8204]: D0EEE2596C: removed",
 					"Feb 11 16:49:27 letterman postfix/qmgr[8204]: DFE732172E: removed",
 				},
-				removedCount:    31,
-				saslFailedCount: 0,
+				removedCount: 31,
 			},
-			fields: fields{
-				qmgrRemoves:           prometheus.NewCounter(prometheus.CounterOpts{}),
-				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+		},
+		{
+			name: "Qmgr sizes",
+			args: args{
+				line: []string{
+					"Mar  6 01:13:50 letterman postfix/qmgr[1436]: D3120239C2: from=<sender@example.com>, size=5779, nrcpt=1 (queue active)",
+					"Mar  6 01:13:50 letterman postfix/qmgr[1436]: 765162183F: from=<sender@example.com>, size=4042, nrcpt=1 (queue active)",
+					"Mar  6 01:13:50 letterman postfix/qmgr[1436]: 765FE23A2C: from=<sender@example.com>, size=3978, nrcpt=1 (queue active)",
+					"Mar  6 01:13:50 letterman postfix/qmgr[1436]: 7C14A2156B: from=<sender@example.com>, size=3985, nrcpt=1 (queue active)",
+					"Mar  6 01:13:50 letterman postfix/qmgr[1436]: 816D523A36: from=<sender@example.com>, size=4067, nrcpt=1 (queue active)",
+				},
+				qmgrInsertsSize:  5,
+				qmgrInsertsNrcpt: 5,
 			},
 		},
 		{
@@ -109,12 +119,18 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 					"Apr 26 10:55:19 tcc1 postfix/smtpd[21126]: warning: SASL authentication failure: Password verification failed",
 					"Apr 26 10:55:19 tcc1 postfix/smtpd[21126]: warning: laptop.local[192.168.1.2]: SASL PLAIN authentication failed: generic failure",
 				},
-				saslFailedCount: 1,
-				removedCount:    0,
+				saslFailedCount:  1,
+				unsupportedLines: 2,
 			},
-			fields: fields{
-				smtpdSASLAuthenticationFailures: prometheus.NewCounter(prometheus.CounterOpts{}),
-				unsupportedLogEntries:           prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+		},
+		{
+			name: "Cleanup lines processed",
+			args: args{
+				line: []string{
+					"Mar  6 09:44:51 letterman postfix/cleanup[16382]: 3C3CE205E3: message-id=<1769646355.10117466.1583484291216@mail-processor-wa1>",
+					"Mar  6 09:44:51 letterman postfix/cleanup[18638]: 3DDBF205E5: message-id=<1134533866.10117467.1583484291216@mail-processor-wa1>",
+				},
+				cleanupProcesses: 2,
 			},
 		},
 		{
@@ -124,14 +140,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 					"Oct 30 13:19:26 mailgw-out1 postfix/smtpd[27530]: EB4B2C19E2: client=xxx[1.2.3.4], sasl_method=PLAIN, sasl_username=user@domain",
 					"Feb 24 16:42:00 letterman postfix/smtpd[24906]: 1CF582025C: client=xxx[2.3.4.5]",
 				},
-				removedCount:           0,
-				saslFailedCount:        0,
-				outgoingTLS:            0,
 				smtpdMessagesProcessed: 2,
-			},
-			fields: fields{
-				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
-				smtpdProcesses:        prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"sasl_method"}),
 			},
 		},
 		{
@@ -141,13 +150,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 					"Jul 24 04:38:17 mail postfix/smtp[30582]: Verified TLS connection established to gmail-smtp-in.l.google.com[108.177.14.26]:25: TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits) key-exchange X25519 server-signature RSA-PSS (2048 bits) server-digest SHA256",
 					"Jul 24 03:28:15 mail postfix/smtp[24052]: Verified TLS connection established to mx2.comcast.net[2001:558:fe21:2a::6]:25: TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits)",
 				},
-				removedCount:    0,
-				saslFailedCount: 0,
-				outgoingTLS:     2,
-			},
-			fields: fields{
-				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
-				smtpTLSConnects:       prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"Verified", "TLSv1.2", "ECDHE-RSA-AES256-GCM-SHA384", "256", "256"}),
+				outgoingTLS: 2,
 			},
 		},
 		{
@@ -156,54 +159,50 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				line: []string{
 					"Feb 24 16:18:40 letterman postfix/smtp[59649]: 5270320179: to=<hebj@telia.com>, relay=mail.telia.com[81.236.60.210]:25, delay=2017, delays=0.1/2017/0.03/0.05, dsn=2.0.0, status=sent (250 2.0.0 6FVIjIMwUJwU66FVIjAEB0 mail accepted for delivery)",
 				},
-				removedCount:           0,
-				saslFailedCount:        0,
-				outgoingTLS:            0,
-				smtpdMessagesProcessed: 0,
-			},
-			fields: fields{
-				smtpDelays: prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"stage"}),
+				smtpDelays: 4,
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e := &LogCollector{
-				cleanupProcesses:                tt.fields.cleanupProcesses,
-				cleanupRejects:                  tt.fields.cleanupRejects,
-				cleanupNotAccepted:              tt.fields.cleanupNotAccepted,
-				lmtpDelays:                      tt.fields.lmtpDelays,
-				pipeDelays:                      tt.fields.pipeDelays,
-				qmgrInsertsNrcpt:                tt.fields.qmgrInsertsNrcpt,
-				qmgrInsertsSize:                 tt.fields.qmgrInsertsSize,
-				qmgrRemoves:                     tt.fields.qmgrRemoves,
-				smtpDelays:                      tt.fields.smtpDelays,
-				smtpTLSConnects:                 tt.fields.smtpTLSConnects,
-				smtpDeferreds:                   tt.fields.smtpDeferreds,
-				smtpdConnects:                   tt.fields.smtpdConnects,
-				smtpdDisconnects:                tt.fields.smtpdDisconnects,
-				smtpdFCrDNSErrors:               tt.fields.smtpdFCrDNSErrors,
-				smtpdLostConnections:            tt.fields.smtpdLostConnections,
-				smtpdProcesses:                  tt.fields.smtpdProcesses,
-				smtpdRejects:                    tt.fields.smtpdRejects,
-				smtpdSASLAuthenticationFailures: tt.fields.smtpdSASLAuthenticationFailures,
-				smtpdTLSConnects:                tt.fields.smtpdTLSConnects,
-				unsupportedLogEntries:           tt.fields.unsupportedLogEntries,
-				logUnsupportedLines:             true,
+			gaugeVec := prometheus.NewGaugeVec(prometheus.GaugeOpts{}, nil)
+			e, err := NewLogCollector(false, gaugeVec)
+			if err != nil {
+				t.Fatalf("cannot construct collector: %v", err)
 			}
 			for _, line := range tt.args.line {
 				e.CollectFromLogLine(line)
 			}
-			assertCounterEquals(t, e.qmgrRemoves, tt.args.removedCount, "Wrong number of lines counted")
-			assertCounterEquals(t, e.smtpdSASLAuthenticationFailures, tt.args.saslFailedCount, "Wrong number of Sasl counter counted")
+			assertCounterEquals(t, e.cleanupProcesses, tt.args.cleanupProcesses, "Wrong number of cleanupProcesses processed")
+			assertCounterEquals(t, e.cleanupRejects, tt.args.cleanupRejects, "Wrong number of cleanupRejects processed")
+			assertCounterEquals(t, e.cleanupNotAccepted, tt.args.cleanupNotAccepted, "Wrong number of cleanupNotAccepted processed")
+			assertCounterEquals(t, e.lmtpDelays, tt.args.lmtpDelays, "Wrong number of lmtpDelays processed")
+			assertCounterEquals(t, e.opendkimSignatureAdded, tt.args.opendkimSignatureAdded, "Wrong number of opendkimSignatureAdded processed")
+			assertCounterEquals(t, e.pipeDelays, tt.args.pipeDelays, "Wrong number of pipeDelays processed")
+			assertCounterEquals(t, e.postfixUp, tt.args.postfixUp, "Wrong number of postfixUp processed")
+			assertCounterEquals(t, e.qmgrInsertsNrcpt, tt.args.qmgrInsertsNrcpt, "Wrong number of qmgrInsertsNrcpt processed")
+			assertCounterEquals(t, e.qmgrInsertsSize, tt.args.qmgrInsertsSize, "Wrong number of qmgrInsertsSize processed")
+			assertCounterEquals(t, e.qmgrRemoves, tt.args.removedCount, "Wrong number of removedCount processed")
+			assertCounterEquals(t, e.smtpDelays, tt.args.smtpDelays, "Wrong number of smtpDelays processed")
 			assertCounterEquals(t, e.smtpTLSConnects, tt.args.outgoingTLS, "Wrong number of TLS connections counted")
-			assertCounterEquals(t, e.smtpdProcesses, tt.args.smtpdMessagesProcessed, "Wrong number of smtpd messages processed")
+			assertCounterEquals(t, e.smtpConnectionTimedOut, tt.args.smtpConnectionTimedOut, "Wrong number of smtpConnectionTimedOut processed")
+			assertCounterEquals(t, e.smtpDeferreds, tt.args.smtpDeferreds, "Wrong number of smtpDeferreds processed")
+			assertCounterEquals(t, e.smtpdConnects, tt.args.smtpdConnects, "Wrong number of smtpdConnects processed")
+			assertCounterEquals(t, e.smtpdDisconnects, tt.args.smtpdDisconnects, "Wrong number of smtpdDisconnects processed")
+			assertCounterEquals(t, e.smtpdFCrDNSErrors, tt.args.smtpdFCrDNSErrors, "Wrong number of smtpdFCrDNSErrors processed")
+			assertCounterEquals(t, e.smtpdLostConnections, tt.args.smtpdLostConnections, "Wrong number of smtpdLostConnections processed")
+			assertCounterEquals(t, e.smtpdProcesses, tt.args.smtpdMessagesProcessed, "Wrong number of smtpdMessagesProcessed processed")
+			assertCounterEquals(t, e.smtpdRejects, tt.args.smtpdRejects, "Wrong number of smtpdRejects processed")
+			assertCounterEquals(t, e.smtpdSASLAuthenticationFailures, tt.args.saslFailedCount, "Wrong number of Sasl counter counted")
+			assertCounterEquals(t, e.smtpdTLSConnects, tt.args.smtpdTLSConnects, "Wrong number of smtpdTLSConnects processed")
+			assertCounterEquals(t, e.smtpStatusDeferred, tt.args.smtpStatusDeferred, "Wrong number of smtpStatusDeferred processed")
+			assertCounterEquals(t, e.unsupportedLogEntries, tt.args.unsupportedLines, "Wrong number of unsupported messages processed")
 		})
 	}
 }
 func assertCounterEquals(t *testing.T, counter prometheus.Collector, expected int, message string) {
 
-	if counter != nil && expected > 0 {
+	if counter != nil {
 		switch counter.(type) {
 		case *prometheus.CounterVec:
 			counter := counter.(*prometheus.CounterVec)
@@ -232,8 +231,62 @@ func assertCounterEquals(t *testing.T, counter prometheus.Collector, expected in
 				count += int(*metricDto.Counter.Value)
 			}
 			assert.Equal(t, expected, count, message)
+		case *prometheus.HistogramVec:
+			counter := counter.(*prometheus.HistogramVec)
+			metricsChan := make(chan prometheus.Metric)
+			go func() {
+				counter.Collect(metricsChan)
+				close(metricsChan)
+			}()
+			var count int = 0
+			for metric := range metricsChan {
+				metricDto := io_prometheus_client.Metric{}
+				metric.Write(&metricDto)
+				count += int(*metricDto.Histogram.SampleCount)
+			}
+			assert.Equal(t, expected, count, message)
+		case prometheus.Histogram:
+			metricsChan := make(chan prometheus.Metric)
+			go func() {
+				counter.Collect(metricsChan)
+				close(metricsChan)
+			}()
+			var count int = 0
+			for metric := range metricsChan {
+				metricDto := io_prometheus_client.Metric{}
+				metric.Write(&metricDto)
+				count += int(*metricDto.Histogram.SampleCount)
+			}
+			assert.Equal(t, expected, count, message)
+		case *prometheus.GaugeVec:
+			counter := counter.(*prometheus.GaugeVec)
+			metricsChan := make(chan prometheus.Metric)
+			go func() {
+				counter.Collect(metricsChan)
+				close(metricsChan)
+			}()
+			var count int = 0
+			for metric := range metricsChan {
+				metricDto := io_prometheus_client.Metric{}
+				metric.Write(&metricDto)
+				count += int(*metricDto.Gauge.Value)
+			}
+			assert.Equal(t, expected, count, message)
+		case prometheus.Gauge:
+			metricsChan := make(chan prometheus.Metric)
+			go func() {
+				counter.Collect(metricsChan)
+				close(metricsChan)
+			}()
+			var count int = 0
+			for metric := range metricsChan {
+				metricDto := io_prometheus_client.Metric{}
+				metric.Write(&metricDto)
+				count += int(*metricDto.Gauge.Value)
+			}
+			assert.Equal(t, expected, count, message)
 		default:
-			t.Fatal("Type not implemented")
+			t.Fatalf("Type not implemented: %T", counter)
 		}
 	}
 }
