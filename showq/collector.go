@@ -92,15 +92,17 @@ func (s *ShowQ) collectMetrics(gauge prometheus.Gauge) {
 	} else {
 		log.Printf("Failed to scrape showq socket: %s", err)
 		gauge.Set(0)
+		// Cool down in case the postfix server is already running hot.
+		time.Sleep(30 * time.Second)
 	}
 }
 
-func (s ShowQ) Describe(ch chan<- *prometheus.Desc) {
+func (s *ShowQ) Describe(ch chan<- *prometheus.Desc) {
 	s.ageHistogram.Describe(ch)
 	s.sizeHistogram.Describe(ch)
 }
 
-func (s ShowQ) Collect(ch chan<- prometheus.Metric) {
+func (s *ShowQ) Collect(ch chan<- prometheus.Metric) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	s.sizeHistogram.Collect(ch)
@@ -108,7 +110,7 @@ func (s ShowQ) Collect(ch chan<- prometheus.Metric) {
 }
 
 // collectShowqFromSocket collects Postfix queue statistics from a socket.
-func (s ShowQ) CollectShowqFromSocket(path string) error {
+func (s *ShowQ) CollectShowqFromSocket(path string) error {
 	fd, err := net.Dial("unix", path)
 	if err != nil {
 		return err
@@ -125,7 +127,7 @@ func (s ShowQ) CollectShowqFromSocket(path string) error {
 // the 'mailq' command. Postfix 3.x uses a binary format, where entries
 // are terminated using null bytes. Auto-detect the format by scanning
 // for null bytes in the first 128 bytes of output.
-func (s ShowQ) collectShowqFromReader(file io.Reader) error {
+func (s *ShowQ) collectShowqFromReader(file io.Reader) error {
 	reader := bufio.NewReader(file)
 	buf, err := reader.Peek(128)
 	if err != nil && err != io.EOF {
@@ -137,7 +139,7 @@ func (s ShowQ) collectShowqFromReader(file io.Reader) error {
 	return s.CollectTextualShowqFromScanner(reader)
 }
 
-func (s ShowQ) CollectTextualShowqFromScanner(file io.Reader) error {
+func (s *ShowQ) CollectTextualShowqFromScanner(file io.Reader) error {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
 	// Initialize all queue buckets to zero.
@@ -202,7 +204,7 @@ func (s ShowQ) CollectTextualShowqFromScanner(file io.Reader) error {
 
 // scanNullTerminatedEntries is a splitting function for bufio.Scanner
 // to split entries by null bytes.
-func (s ShowQ) scanNullTerminatedEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
+func (s *ShowQ) scanNullTerminatedEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if i := bytes.IndexByte(data, 0); i >= 0 {
 		// Valid record found.
 		return i + 1, data[0:i], nil
@@ -216,7 +218,7 @@ func (s ShowQ) scanNullTerminatedEntries(data []byte, atEOF bool) (advance int, 
 }
 
 // collectBinaryShowqFromReader parses Postfix's binary showq format.
-func (s ShowQ) collectBinaryShowqFromReader(file io.Reader) error {
+func (s *ShowQ) collectBinaryShowqFromReader(file io.Reader) error {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(s.scanNullTerminatedEntries)
 
