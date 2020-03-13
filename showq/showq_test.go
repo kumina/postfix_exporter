@@ -54,7 +54,8 @@ func TestCollectShowqFromReader(t *testing.T) {
 			showQ := NewShowQCollector(tt.args.file, mock.GaugeVec{}, "10s")
 			showQ.ageHistogram = ageHistogram
 			showQ.sizeHistogram = sizeHistogram
-			if err := showQ.CollectShowqFromSocket(socket); (err != nil) != tt.wantErr {
+			hist := histograms{ageHistogram: ageHistogram, sizeHistogram: sizeHistogram}
+			if err := showQ.CollectShowqFromSocket(socket, hist); (err != nil) != tt.wantErr {
 				t.Errorf("CollectShowqFromSocket() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			assertSumEquals(t, sizeHistogram, tt.expectedTotalSize, "Expected a lot more data")
