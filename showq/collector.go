@@ -92,8 +92,6 @@ func (s *ShowQ) collectMetrics(gauge prometheus.Gauge) {
 	} else {
 		log.Printf("Failed to scrape showq socket: %s", err)
 		gauge.Set(0)
-		// Cool down in case the postfix server is already running hot.
-		time.Sleep(30 * time.Second)
 	}
 }
 
