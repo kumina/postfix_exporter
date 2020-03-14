@@ -54,7 +54,7 @@ type LogCollector struct {
 	smtpdSASLAuthenticationFailures prometheus.Counter
 	smtpdTLSConnects                *prometheus.CounterVec
 	unsupportedLogEntries           *prometheus.CounterVec
-	smtpStatusDeferred              prometheus.Counter
+	smtpStatusDeferred              *prometheus.CounterVec
 	opendkimSignatureAdded          *prometheus.CounterVec
 	postfixUp                       showq.GaugeVec
 }
@@ -64,7 +64,7 @@ var (
 	logLine                             = regexp.MustCompile(` ?(postfix|opendkim)(/(\w+))?\[\d+\]: (.*)`)
 	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
 	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
-	smtpStatusDeferredLine              = regexp.MustCompile(`, status=deferred`)
+	smtpStatusDeferredLine              = regexp.MustCompile(`, status=(\w+)`)
 	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)`)
 	smtpConnectionTimedOut              = regexp.MustCompile(`^connect\s+to\s+(.*)\[(.*)\]:(\d+):\s+(Connection timed out)$`)
 	smtpdFCrDNSErrorsLine               = regexp.MustCompile(`^warning: hostname \S+ does not resolve to address `)
@@ -135,7 +135,7 @@ func (e *LogCollector) CollectFromLogLine(line string) {
 				addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup", "")
 				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission", "")
 				if smtpMatches := smtpStatusDeferredLine.FindStringSubmatch(remainder); smtpMatches != nil {
-					e.smtpStatusDeferred.Inc()
+					e.smtpStatusDeferred.WithLabelValues(smtpMatches[1]).Inc()
 				}
 			} else if smtpTLSMatches := smtpTLSLine.FindStringSubmatch(remainder); smtpTLSMatches != nil {
 				e.smtpTLSConnects.WithLabelValues(smtpTLSMatches[1:]...).Inc()
@@ -354,11 +354,11 @@ func NewLogCollector(logUnsupportedLines bool, postfixUp showq.GaugeVec) (*LogCo
 				Help:      "Log entries that could not be processed.",
 			},
 			[]string{"service"}),
-		smtpStatusDeferred: prometheus.NewCounter(prometheus.CounterOpts{
+		smtpStatusDeferred: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "postfix",
 			Name:      "smtp_status_deferred",
 			Help:      "Total number of messages deferred.",
-		}),
+		}, []string{"status"}),
 		opendkimSignatureAdded: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "opendkim",

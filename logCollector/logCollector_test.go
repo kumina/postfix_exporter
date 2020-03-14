@@ -159,7 +159,20 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				line: []string{
 					"Feb 24 16:18:40 letterman postfix/smtp[59649]: 5270320179: to=<hebj@telia.com>, relay=mail.telia.com[81.236.60.210]:25, delay=2017, delays=0.1/2017/0.03/0.05, dsn=2.0.0, status=sent (250 2.0.0 6FVIjIMwUJwU66FVIjAEB0 mail accepted for delivery)",
 				},
-				smtpDelays: 4,
+				smtpDelays:         4,
+				smtpStatusDeferred: 1,
+			},
+		},
+		{name: "delivery status",
+			args: args{line: []string{
+				"Mar 14 02:19:56 letterman postfix/smtp[39982]: 7452832B28: to=<example@yahoo.com>, relay=mta6.am0.yahoodns.net[67.195.228.94]:25, delay=1905, delays=1682/217/1.2/5.6, dsn=2.0.0, status=sent (250 ok dirdel)",
+				"Mar 14 02:19:56 letterman postfix/smtp[42367]: E7D8726A3B: to=<examplet@gmail.com>, relay=gmail-smtp-in.l.google.com[108.177.14.27]:25, delay=2134, delays=2133/0/0.12/0.59, dsn=2.0.0, status=sent (250 2.0.0 OK  1584148796 q7si7179",
+				"Mar 14 03:25:38 letterman postfix/smtp[6656]: 5BECF63C4A: to=<example@icloud.se>, relay=none, delay=44899, delays=44869/0/30/0, dsn=4.4.1, status=deferred (connect to icloud.se[17.253.142.4]:25: Connection timed out)",
+				"Mar 14 03:25:56 letterman postfix/smtp[5252]: 5412634DDB: to=<example@gafe.se>, relay=none, delay=57647, delays=57647/0/0/0, dsn=4.4.1, status=deferred (connect to gafe.se[151.252.30.111]:25: Connection refused)",
+				"Mar 14 02:44:00 letterman postfix/smtp[53185]: BB40124D8D: to=<example@hotmai.com>, relay=none, delay=3804, delays=3804/0/0.01/0, dsn=5.4.4, status=bounced (Host or domain name not found. Name service error for name=hotmai.com type=A: Host found but no data record of requested type)",
+			},
+				smtpDelays:         20,
+				smtpStatusDeferred: 5,
 			},
 		},
 	}
