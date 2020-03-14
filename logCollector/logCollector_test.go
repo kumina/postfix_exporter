@@ -25,14 +25,13 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		qmgrInsertsSize        int
 		smtpDelays             int
 		smtpConnectionTimedOut int
-		smtpDeferreds          int
 		smtpdConnects          int
 		smtpdDisconnects       int
 		smtpdFCrDNSErrors      int
 		smtpdLostConnections   int
 		smtpdRejects           int
 		smtpdTLSConnects       int
-		smtpStatusDeferred     int
+		smtpStatusCount        int
 		opendkimSignatureAdded int
 		postfixUp              int
 	}
@@ -159,8 +158,8 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				line: []string{
 					"Feb 24 16:18:40 letterman postfix/smtp[59649]: 5270320179: to=<hebj@telia.com>, relay=mail.telia.com[81.236.60.210]:25, delay=2017, delays=0.1/2017/0.03/0.05, dsn=2.0.0, status=sent (250 2.0.0 6FVIjIMwUJwU66FVIjAEB0 mail accepted for delivery)",
 				},
-				smtpDelays:         4,
-				smtpStatusDeferred: 1,
+				smtpDelays:      4,
+				smtpStatusCount: 1,
 			},
 		},
 		{name: "delivery status",
@@ -171,8 +170,8 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				"Mar 14 03:25:56 letterman postfix/smtp[5252]: 5412634DDB: to=<example@gafe.se>, relay=none, delay=57647, delays=57647/0/0/0, dsn=4.4.1, status=deferred (connect to gafe.se[151.252.30.111]:25: Connection refused)",
 				"Mar 14 02:44:00 letterman postfix/smtp[53185]: BB40124D8D: to=<example@hotmai.com>, relay=none, delay=3804, delays=3804/0/0.01/0, dsn=5.4.4, status=bounced (Host or domain name not found. Name service error for name=hotmai.com type=A: Host found but no data record of requested type)",
 			},
-				smtpDelays:         20,
-				smtpStatusDeferred: 5,
+				smtpDelays:      20,
+				smtpStatusCount: 5,
 			},
 		},
 	}
@@ -199,7 +198,6 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			assertCounterEquals(t, e.smtpDelays, tt.args.smtpDelays, "Wrong number of smtpDelays processed")
 			assertCounterEquals(t, e.smtpTLSConnects, tt.args.outgoingTLS, "Wrong number of TLS connections counted")
 			assertCounterEquals(t, e.smtpConnectionTimedOut, tt.args.smtpConnectionTimedOut, "Wrong number of smtpConnectionTimedOut processed")
-			assertCounterEquals(t, e.smtpDeferreds, tt.args.smtpDeferreds, "Wrong number of smtpDeferreds processed")
 			assertCounterEquals(t, e.smtpdConnects, tt.args.smtpdConnects, "Wrong number of smtpdConnects processed")
 			assertCounterEquals(t, e.smtpdDisconnects, tt.args.smtpdDisconnects, "Wrong number of smtpdDisconnects processed")
 			assertCounterEquals(t, e.smtpdFCrDNSErrors, tt.args.smtpdFCrDNSErrors, "Wrong number of smtpdFCrDNSErrors processed")
@@ -208,7 +206,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			assertCounterEquals(t, e.smtpdRejects, tt.args.smtpdRejects, "Wrong number of smtpdRejects processed")
 			assertCounterEquals(t, e.smtpdSASLAuthenticationFailures, tt.args.saslFailedCount, "Wrong number of Sasl counter counted")
 			assertCounterEquals(t, e.smtpdTLSConnects, tt.args.smtpdTLSConnects, "Wrong number of smtpdTLSConnects processed")
-			assertCounterEquals(t, e.smtpStatusDeferred, tt.args.smtpStatusDeferred, "Wrong number of smtpStatusDeferred processed")
+			assertCounterEquals(t, e.smtpStatusCount, tt.args.smtpStatusCount, "Wrong number of smtpStatusCount processed")
 			assertCounterEquals(t, e.unsupportedLogEntries, tt.args.unsupportedLines, "Wrong number of unsupported messages processed")
 		})
 	}

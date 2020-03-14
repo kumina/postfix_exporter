@@ -44,7 +44,6 @@ type LogCollector struct {
 	smtpDelays                      *prometheus.HistogramVec
 	smtpTLSConnects                 *prometheus.CounterVec
 	smtpConnectionTimedOut          prometheus.Counter
-	smtpDeferreds                   prometheus.Counter
 	smtpdConnects                   prometheus.Counter
 	smtpdDisconnects                prometheus.Counter
 	smtpdFCrDNSErrors               prometheus.Counter
@@ -54,7 +53,7 @@ type LogCollector struct {
 	smtpdSASLAuthenticationFailures prometheus.Counter
 	smtpdTLSConnects                *prometheus.CounterVec
 	unsupportedLogEntries           *prometheus.CounterVec
-	smtpStatusDeferred              *prometheus.CounterVec
+	smtpStatusCount                 *prometheus.CounterVec
 	opendkimSignatureAdded          *prometheus.CounterVec
 	postfixUp                       showq.GaugeVec
 }
@@ -64,7 +63,7 @@ var (
 	logLine                             = regexp.MustCompile(` ?(postfix|opendkim)(/(\w+))?\[\d+\]: (.*)`)
 	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
 	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
-	smtpStatusDeferredLine              = regexp.MustCompile(`, status=(\w+)`)
+	smtpStatusLine                      = regexp.MustCompile(`, status=(\w+)`)
 	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)`)
 	smtpConnectionTimedOut              = regexp.MustCompile(`^connect\s+to\s+(.*)\[(.*)\]:(\d+):\s+(Connection timed out)$`)
 	smtpdFCrDNSErrorsLine               = regexp.MustCompile(`^warning: hostname \S+ does not resolve to address `)
@@ -134,8 +133,8 @@ func (e *LogCollector) CollectFromLogLine(line string) {
 				addToHistogramVec(e.smtpDelays, smtpMatches[3], "queue_manager", "")
 				addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup", "")
 				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission", "")
-				if smtpMatches := smtpStatusDeferredLine.FindStringSubmatch(remainder); smtpMatches != nil {
-					e.smtpStatusDeferred.WithLabelValues(smtpMatches[1]).Inc()
+				if smtpMatches := smtpStatusLine.FindStringSubmatch(remainder); smtpMatches != nil {
+					e.smtpStatusCount.WithLabelValues(smtpMatches[1]).Inc()
 				}
 			} else if smtpTLSMatches := smtpTLSLine.FindStringSubmatch(remainder); smtpTLSMatches != nil {
 				e.smtpTLSConnects.WithLabelValues(smtpTLSMatches[1:]...).Inc()
@@ -289,11 +288,6 @@ func NewLogCollector(logUnsupportedLines bool, postfixUp showq.GaugeVec) (*LogCo
 				Help:      "Total number of outgoing TLS connections.",
 			},
 			[]string{"trust", "protocol", "cipher", "secret_bits", "algorithm_bits"}),
-		smtpDeferreds: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: "postfix",
-			Name:      "smtp_deferred_messages_total",
-			Help:      "Total number of messages that have been deferred on SMTP.",
-		}),
 		smtpConnectionTimedOut: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "postfix",
 			Name:      "smtp_connection_timed_out_total",
@@ -354,10 +348,10 @@ func NewLogCollector(logUnsupportedLines bool, postfixUp showq.GaugeVec) (*LogCo
 				Help:      "Log entries that could not be processed.",
 			},
 			[]string{"service"}),
-		smtpStatusDeferred: prometheus.NewCounterVec(prometheus.CounterOpts{
+		smtpStatusCount: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "postfix",
-			Name:      "smtp_status_deferred",
-			Help:      "Total number of messages deferred.",
+			Name:      "smtp_status_total",
+			Help:      "Total number of messages handled by status.",
 		}, []string{"status"}),
 		opendkimSignatureAdded: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -391,7 +385,6 @@ func (e *LogCollector) Describe(ch chan<- *prometheus.Desc) {
 	e.qmgrRemoves.Describe(ch)
 	e.smtpDelays.Describe(ch)
 	e.smtpTLSConnects.Describe(ch)
-	e.smtpDeferreds.Describe(ch)
 	e.smtpdConnects.Describe(ch)
 	e.smtpdDisconnects.Describe(ch)
 	e.smtpdFCrDNSErrors.Describe(ch)
@@ -400,7 +393,7 @@ func (e *LogCollector) Describe(ch chan<- *prometheus.Desc) {
 	e.smtpdRejects.Describe(ch)
 	e.smtpdSASLAuthenticationFailures.Describe(ch)
 	e.smtpdTLSConnects.Describe(ch)
-	e.smtpStatusDeferred.Describe(ch)
+	e.smtpStatusCount.Describe(ch)
 	e.unsupportedLogEntries.Describe(ch)
 	e.smtpConnectionTimedOut.Describe(ch)
 	e.opendkimSignatureAdded.Describe(ch)
@@ -418,7 +411,6 @@ func (e *LogCollector) Collect(ch chan<- prometheus.Metric) {
 	e.qmgrRemoves.Collect(ch)
 	e.smtpDelays.Collect(ch)
 	e.smtpTLSConnects.Collect(ch)
-	e.smtpDeferreds.Collect(ch)
 	e.smtpdConnects.Collect(ch)
 	e.smtpdDisconnects.Collect(ch)
 	e.smtpdFCrDNSErrors.Collect(ch)
@@ -427,7 +419,7 @@ func (e *LogCollector) Collect(ch chan<- prometheus.Metric) {
 	e.smtpdRejects.Collect(ch)
 	e.smtpdSASLAuthenticationFailures.Collect(ch)
 	e.smtpdTLSConnects.Collect(ch)
-	e.smtpStatusDeferred.Collect(ch)
+	e.smtpStatusCount.Collect(ch)
 	e.unsupportedLogEntries.Collect(ch)
 	e.smtpConnectionTimedOut.Collect(ch)
 	e.opendkimSignatureAdded.Collect(ch)
