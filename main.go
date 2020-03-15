@@ -24,6 +24,7 @@ func main() {
 		listenAddress                                 = app.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9154").String()
 		metricsPath                                   = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
 		postfixShowqPath                              = app.Flag("postfix.showq_path", "Path at which Postfix places its showq socket.").Default("/var/spool/postfix/public/showq").String()
+		postfixShowqLocation                          = app.Flag("postfix.location", "The location used for showq.").Default("Local").String()
 		postfixShowqInterval                          = app.Flag("postfix.showq_interval", "Interval between showq scrapes.").Default("10s").String()
 		postfixLogfilePath                            = app.Flag("postfix.logfile_path", "Path where Postfix writes log entries.").Default("/var/log/maillog").String()
 		logUnsupportedLines                           = app.Flag("log.unsupported", "Log all unsupported lines.").Bool()
@@ -94,7 +95,7 @@ func main() {
 	}
 
 	logCollectionDone := logFileCollector.StartMetricCollection(ctx, logLines)
-	showqCollectionDone, err := showQ.StartMetricCollection(ctx)
+	showqCollectionDone, err := showQ.StartMetricCollection(ctx, *postfixShowqLocation)
 	if err != nil {
 		log.Printf("failed to start showq metrics collection: %v", err)
 	}

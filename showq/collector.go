@@ -59,7 +59,7 @@ func NewShowQCollector(path string, upGauge GaugeVec, interval string) *ShowQ {
 	}
 }
 
-func (s *ShowQ) StartMetricCollection(ctx context.Context) (<-chan interface{}, error) {
+func (s *ShowQ) StartMetricCollection(ctx context.Context, location string) (<-chan interface{}, error) {
 	done := make(chan interface{})
 	duration, err := time.ParseDuration(s.scrapeInterval)
 	if err != nil {
@@ -75,7 +75,7 @@ func (s *ShowQ) StartMetricCollection(ctx context.Context) (<-chan interface{}, 
 				gauge.Set(0)
 				return
 			case <-ticker.C:
-				s.collectMetrics(gauge)
+				s.collectMetrics(gauge, location)
 			}
 		}
 
@@ -83,9 +83,9 @@ func (s *ShowQ) StartMetricCollection(ctx context.Context) (<-chan interface{}, 
 	return done, nil
 }
 
-func (s *ShowQ) collectMetrics(gauge prometheus.Gauge) {
+func (s *ShowQ) collectMetrics(gauge prometheus.Gauge, location string) {
 	hist := NewHistograms()
-	err := CollectShowqFromSocket(s.path, hist)
+	err := CollectShowqFromSocket(s.path, hist, location)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sizeHistogram = hist.SizeHistogram
@@ -111,13 +111,13 @@ func (s *ShowQ) Collect(ch chan<- prometheus.Metric) {
 }
 
 // collectShowqFromSocket collects Postfix queue statistics from a socket.
-func CollectShowqFromSocket(path string, hist Histograms) error {
+func CollectShowqFromSocket(path string, hist Histograms, location string) error {
 	fd, err := net.Dial("unix", path)
 	if err != nil {
 		return err
 	}
 	defer fd.Close()
-	return collectShowqFromReader(fd, hist)
+	return collectShowqFromReader(fd, hist, location)
 }
 
 // collectShowqFromReader parses the output of Postfix's 'showq' command
@@ -128,7 +128,7 @@ func CollectShowqFromSocket(path string, hist Histograms) error {
 // the 'mailq' command. Postfix 3.x uses a binary format, where entries
 // are terminated using null bytes. Auto-detect the format by scanning
 // for null bytes in the first 128 bytes of output.
-func collectShowqFromReader(file io.Reader, hist Histograms) error {
+func collectShowqFromReader(file io.Reader, hist Histograms, location string) error {
 	reader := bufio.NewReader(file)
 	buf, err := reader.Peek(128)
 	if err != nil && err != io.EOF {
@@ -137,15 +137,15 @@ func collectShowqFromReader(file io.Reader, hist Histograms) error {
 	if bytes.IndexByte(buf, 0) >= 0 {
 		return CollectBinaryShowqFromReader(reader, hist)
 	}
-	return CollectTextualShowqFromScanner(reader, hist)
+	return CollectTextualShowqFromScanner(reader, hist, location)
 }
 
-func CollectTextualShowqFromScanner(file io.Reader, hist Histograms) error {
+func CollectTextualShowqFromScanner(file io.Reader, hist Histograms, locationName string) error {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
 	// Initialize all queue buckets to zero.
 
-	location, err := time.LoadLocation("Local")
+	location, err := time.LoadLocation(locationName)
 	if err != nil {
 		log.Println(err)
 	}
@@ -178,37 +178,47 @@ func CollectTextualShowqFromScanner(file io.Reader, hist Histograms) error {
 			return err
 		}
 
-		// Parse the message date. Unfortunately, the
-		// output contains no year number. Assume it
-		// applies to the last year for which the
-		// message date doesn't exceed time.Now().
-		date, err := time.ParseInLocation("Mon Jan 2 15:04:05", dateMatch, location)
-		if err != nil {
-			return err
-		}
-		now := time.Now()
-		date = date.AddDate(now.Year(), 0, 0)
-		if date.After(now) {
-			date = date.AddDate(-1, 0, 0)
+		seconds, err2 := ParseDateToSeconds(err, dateMatch, location)
+		if err2 != nil {
+			return err2
 		}
 
 		hist.SizeHistogram.WithLabelValues(queue).Observe(size)
-		seconds := now.Sub(date).Seconds()
 		hist.AgeHistogram.WithLabelValues(queue).Observe(seconds)
 	}
 	return scanner.Err()
 }
 
+func ParseDateToSeconds(err error, dateMatch string, location *time.Location) (float64, error) {
+	// Parse the message date. Unfortunately, the
+	// output contains no year number. Assume it
+	// applies to the last year for which the
+	// message date doesn't exceed time.Now().
+	date, err := time.ParseInLocation("Mon Jan 2 15:04:05", dateMatch, location)
+	if err != nil {
+		return 0, err
+	}
+	now := time.Now()
+	date = date.AddDate(now.Year(), 0, 0)
+	if date.After(now) {
+		date = date.AddDate(-1, 0, 0)
+	}
+	seconds := now.Sub(date).Seconds()
+	return seconds, nil
+}
+
 // scanNullTerminatedEntries is a splitting function for bufio.Scanner
 // to split entries by null bytes.
 func scanNullTerminatedEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if i := bytes.IndexByte(data, 0); i >= 0 {
+	i := bytes.IndexByte(data, 0)
+	switch {
+	case i >= 0:
 		// Valid record found.
 		return i + 1, data[0:i], nil
-	} else if atEOF && len(data) != 0 {
+	case atEOF && len(data) != 0:
 		// Data at the end of the file without a null terminator.
 		return 0, nil, errors.New("Expected null byte terminator")
-	} else {
+	default:
 		// Request more data.
 		return 0, nil, nil
 	}
