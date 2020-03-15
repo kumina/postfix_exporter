@@ -7,6 +7,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.0.0
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
 	github.com/hpcloud/tail v1.0.0
+	github.com/mibk/dupl v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.4.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/sirupsen/logrus v1.4.2

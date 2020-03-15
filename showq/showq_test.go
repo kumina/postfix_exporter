@@ -12,10 +12,8 @@ import (
 	"path"
 	"testing"
 
-	"github.com/kumina/postfix_exporter/mock"
+	"github.com/kumina/postfix_exporter/testUtils"
 	"github.com/prometheus/client_golang/prometheus"
-	io_prometheus_client "github.com/prometheus/client_model/go"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestCollectShowqFromReader(t *testing.T) {
@@ -51,16 +49,16 @@ func TestCollectShowqFromReader(t *testing.T) {
 
 			sizeHistogram := prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"active"})
 			ageHistogram := prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"active"})
-			showQ := NewShowQCollector(tt.args.file, mock.GaugeVec{}, "10s")
+			showQ := NewShowQCollector(tt.args.file, prometheus.NewGaugeVec(prometheus.GaugeOpts{}, []string{"path"}), "10s")
 			showQ.ageHistogram = ageHistogram
 			showQ.sizeHistogram = sizeHistogram
 			hist := histograms{ageHistogram: ageHistogram, sizeHistogram: sizeHistogram}
 			if err := showQ.CollectShowqFromSocket(socket, hist); (err != nil) != tt.wantErr {
 				t.Errorf("CollectShowqFromSocket() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			assertSumEquals(t, sizeHistogram, tt.expectedTotalSize, "Expected a lot more data")
-			assertCounterEquals(t, sizeHistogram, tt.expectedTotalCount, "Wrong number of points counted.")
-			assertSumLessThan(t, ageHistogram, 0, "Age not greater than 0")
+			testUtils.AssertSumEquals(t, sizeHistogram, tt.expectedTotalSize, "Expected a lot more data")
+			testUtils.AssertCounterEquals(t, sizeHistogram, tt.expectedTotalCount, "Wrong number of points counted.")
+			testUtils.AssertSumLessThan(t, ageHistogram, 0, "Age not greater than 0")
 			cancelFunc()
 			<-ch
 		})
@@ -117,168 +115,4 @@ func writeToSocket(ctx context.Context, filename string) (string, <-chan interfa
 		ch <- struct{}{}
 	}()
 	return socketName, ch, nil
-}
-
-func assertCounterEquals(t *testing.T, counter prometheus.Collector, expected int, message string) {
-
-	if counter != nil {
-		switch counter.(type) {
-		case *prometheus.CounterVec:
-			counter := counter.(*prometheus.CounterVec)
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Counter.Value)
-			}
-			assert.Equal(t, expected, count, message)
-		case prometheus.Counter:
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Counter.Value)
-			}
-			assert.Equal(t, expected, count, message)
-		case *prometheus.HistogramVec:
-			counter := counter.(*prometheus.HistogramVec)
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Histogram.SampleCount)
-			}
-			assert.Equal(t, expected, count, message)
-		case prometheus.Histogram:
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Histogram.SampleCount)
-			}
-			assert.Equal(t, expected, count, message)
-		case *prometheus.GaugeVec:
-			counter := counter.(*prometheus.GaugeVec)
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Gauge.Value)
-			}
-			assert.Equal(t, expected, count, message)
-		case prometheus.Gauge:
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Gauge.Value)
-			}
-			assert.Equal(t, expected, count, message)
-		default:
-			t.Fatalf("Type not implemented: %T", counter)
-		}
-	}
-}
-
-func assertSumEquals(t *testing.T, counter prometheus.Collector, expected int, message string) {
-
-	if counter != nil {
-		switch counter.(type) {
-		case *prometheus.HistogramVec:
-			counter := counter.(*prometheus.HistogramVec)
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Histogram.SampleSum)
-			}
-			assert.Equal(t, expected, count, message)
-		case prometheus.Histogram:
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Histogram.SampleSum)
-			}
-			assert.Equal(t, expected, count, message)
-		default:
-			t.Fatalf("Type not implemented: %T", counter)
-		}
-	}
-}
-func assertSumLessThan(t *testing.T, counter prometheus.Collector, expected int, message string) {
-
-	if counter != nil {
-		switch counter.(type) {
-		case *prometheus.HistogramVec:
-			counter := counter.(*prometheus.HistogramVec)
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Histogram.SampleSum)
-			}
-			assert.Less(t, expected, count, message)
-		case prometheus.Histogram:
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Histogram.SampleSum)
-			}
-			assert.Less(t, expected, count, message)
-		default:
-			t.Fatalf("Type not implemented: %T", counter)
-		}
-	}
 }

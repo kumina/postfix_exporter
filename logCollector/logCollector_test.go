@@ -3,9 +3,8 @@ package logCollector
 import (
 	"testing"
 
+	"github.com/kumina/postfix_exporter/testUtils"
 	"github.com/prometheus/client_golang/prometheus"
-	io_prometheus_client "github.com/prometheus/client_model/go"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestPostfixExporter_CollectFromLogline(t *testing.T) {
@@ -185,119 +184,29 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			for _, line := range tt.args.line {
 				e.CollectFromLogLine(line)
 			}
-			assertCounterEquals(t, e.cleanupProcesses, tt.args.cleanupProcesses, "Wrong number of cleanupProcesses processed")
-			assertCounterEquals(t, e.cleanupRejects, tt.args.cleanupRejects, "Wrong number of cleanupRejects processed")
-			assertCounterEquals(t, e.cleanupNotAccepted, tt.args.cleanupNotAccepted, "Wrong number of cleanupNotAccepted processed")
-			assertCounterEquals(t, e.lmtpDelays, tt.args.lmtpDelays, "Wrong number of lmtpDelays processed")
-			assertCounterEquals(t, e.opendkimSignatureAdded, tt.args.opendkimSignatureAdded, "Wrong number of opendkimSignatureAdded processed")
-			assertCounterEquals(t, e.pipeDelays, tt.args.pipeDelays, "Wrong number of pipeDelays processed")
-			assertCounterEquals(t, e.postfixUp, tt.args.postfixUp, "Wrong number of postfixUp processed")
-			assertCounterEquals(t, e.qmgrInsertsNrcpt, tt.args.qmgrInsertsNrcpt, "Wrong number of qmgrInsertsNrcpt processed")
-			assertCounterEquals(t, e.qmgrInsertsSize, tt.args.qmgrInsertsSize, "Wrong number of qmgrInsertsSize processed")
-			assertCounterEquals(t, e.qmgrRemoves, tt.args.removedCount, "Wrong number of removedCount processed")
-			assertCounterEquals(t, e.smtpDelays, tt.args.smtpDelays, "Wrong number of smtpDelays processed")
-			assertCounterEquals(t, e.smtpTLSConnects, tt.args.outgoingTLS, "Wrong number of TLS connections counted")
-			assertCounterEquals(t, e.smtpConnectionTimedOut, tt.args.smtpConnectionTimedOut, "Wrong number of smtpConnectionTimedOut processed")
-			assertCounterEquals(t, e.smtpdConnects, tt.args.smtpdConnects, "Wrong number of smtpdConnects processed")
-			assertCounterEquals(t, e.smtpdDisconnects, tt.args.smtpdDisconnects, "Wrong number of smtpdDisconnects processed")
-			assertCounterEquals(t, e.smtpdFCrDNSErrors, tt.args.smtpdFCrDNSErrors, "Wrong number of smtpdFCrDNSErrors processed")
-			assertCounterEquals(t, e.smtpdLostConnections, tt.args.smtpdLostConnections, "Wrong number of smtpdLostConnections processed")
-			assertCounterEquals(t, e.smtpdProcesses, tt.args.smtpdMessagesProcessed, "Wrong number of smtpdMessagesProcessed processed")
-			assertCounterEquals(t, e.smtpdRejects, tt.args.smtpdRejects, "Wrong number of smtpdRejects processed")
-			assertCounterEquals(t, e.smtpdSASLAuthenticationFailures, tt.args.saslFailedCount, "Wrong number of Sasl counter counted")
-			assertCounterEquals(t, e.smtpdTLSConnects, tt.args.smtpdTLSConnects, "Wrong number of smtpdTLSConnects processed")
-			assertCounterEquals(t, e.smtpStatusCount, tt.args.smtpStatusCount, "Wrong number of smtpStatusCount processed")
-			assertCounterEquals(t, e.unsupportedLogEntries, tt.args.unsupportedLines, "Wrong number of unsupported messages processed")
+			testUtils.AssertCounterEquals(t, e.cleanupProcesses, tt.args.cleanupProcesses, "Wrong number of cleanupProcesses processed")
+			testUtils.AssertCounterEquals(t, e.cleanupRejects, tt.args.cleanupRejects, "Wrong number of cleanupRejects processed")
+			testUtils.AssertCounterEquals(t, e.cleanupNotAccepted, tt.args.cleanupNotAccepted, "Wrong number of cleanupNotAccepted processed")
+			testUtils.AssertCounterEquals(t, e.lmtpDelays, tt.args.lmtpDelays, "Wrong number of lmtpDelays processed")
+			testUtils.AssertCounterEquals(t, e.opendkimSignatureAdded, tt.args.opendkimSignatureAdded, "Wrong number of opendkimSignatureAdded processed")
+			testUtils.AssertCounterEquals(t, e.pipeDelays, tt.args.pipeDelays, "Wrong number of pipeDelays processed")
+			testUtils.AssertCounterEquals(t, e.postfixUp, tt.args.postfixUp, "Wrong number of postfixUp processed")
+			testUtils.AssertCounterEquals(t, e.qmgrInsertsNrcpt, tt.args.qmgrInsertsNrcpt, "Wrong number of qmgrInsertsNrcpt processed")
+			testUtils.AssertCounterEquals(t, e.qmgrInsertsSize, tt.args.qmgrInsertsSize, "Wrong number of qmgrInsertsSize processed")
+			testUtils.AssertCounterEquals(t, e.qmgrRemoves, tt.args.removedCount, "Wrong number of removedCount processed")
+			testUtils.AssertCounterEquals(t, e.smtpDelays, tt.args.smtpDelays, "Wrong number of smtpDelays processed")
+			testUtils.AssertCounterEquals(t, e.smtpTLSConnects, tt.args.outgoingTLS, "Wrong number of TLS connections counted")
+			testUtils.AssertCounterEquals(t, e.smtpConnectionTimedOut, tt.args.smtpConnectionTimedOut, "Wrong number of smtpConnectionTimedOut processed")
+			testUtils.AssertCounterEquals(t, e.smtpdConnects, tt.args.smtpdConnects, "Wrong number of smtpdConnects processed")
+			testUtils.AssertCounterEquals(t, e.smtpdDisconnects, tt.args.smtpdDisconnects, "Wrong number of smtpdDisconnects processed")
+			testUtils.AssertCounterEquals(t, e.smtpdFCrDNSErrors, tt.args.smtpdFCrDNSErrors, "Wrong number of smtpdFCrDNSErrors processed")
+			testUtils.AssertCounterEquals(t, e.smtpdLostConnections, tt.args.smtpdLostConnections, "Wrong number of smtpdLostConnections processed")
+			testUtils.AssertCounterEquals(t, e.smtpdProcesses, tt.args.smtpdMessagesProcessed, "Wrong number of smtpdMessagesProcessed processed")
+			testUtils.AssertCounterEquals(t, e.smtpdRejects, tt.args.smtpdRejects, "Wrong number of smtpdRejects processed")
+			testUtils.AssertCounterEquals(t, e.smtpdSASLAuthenticationFailures, tt.args.saslFailedCount, "Wrong number of Sasl counter counted")
+			testUtils.AssertCounterEquals(t, e.smtpdTLSConnects, tt.args.smtpdTLSConnects, "Wrong number of smtpdTLSConnects processed")
+			testUtils.AssertCounterEquals(t, e.smtpStatusCount, tt.args.smtpStatusCount, "Wrong number of smtpStatusCount processed")
+			testUtils.AssertCounterEquals(t, e.unsupportedLogEntries, tt.args.unsupportedLines, "Wrong number of unsupported messages processed")
 		})
-	}
-}
-func assertCounterEquals(t *testing.T, counter prometheus.Collector, expected int, message string) {
-
-	if counter != nil {
-		switch counter.(type) {
-		case *prometheus.CounterVec:
-			counter := counter.(*prometheus.CounterVec)
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Counter.Value)
-			}
-			assert.Equal(t, expected, count, message)
-		case prometheus.Counter:
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Counter.Value)
-			}
-			assert.Equal(t, expected, count, message)
-		case *prometheus.HistogramVec:
-			counter := counter.(*prometheus.HistogramVec)
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Histogram.SampleCount)
-			}
-			assert.Equal(t, expected, count, message)
-		case prometheus.Histogram:
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Histogram.SampleCount)
-			}
-			assert.Equal(t, expected, count, message)
-		case *prometheus.GaugeVec:
-			counter := counter.(*prometheus.GaugeVec)
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Gauge.Value)
-			}
-			assert.Equal(t, expected, count, message)
-		case prometheus.Gauge:
-			metricsChan := make(chan prometheus.Metric)
-			go func() {
-				counter.Collect(metricsChan)
-				close(metricsChan)
-			}()
-			var count int = 0
-			for metric := range metricsChan {
-				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
-				count += int(*metricDto.Gauge.Value)
-			}
-			assert.Equal(t, expected, count, message)
-		default:
-			t.Fatalf("Type not implemented: %T", counter)
-		}
 	}
 }

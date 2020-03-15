@@ -33,6 +33,7 @@ type ShowQ struct {
 const queueOther = "other"
 const queueHold = "hold"
 const queueActive = "active"
+const queueIncoming = "queueIncoming"
 
 func NewShowQCollector(path string, upGauge GaugeVec, interval string) *ShowQ {
 	return &ShowQ{
@@ -158,8 +159,13 @@ func (s *ShowQ) collectShowqFromReader(file io.Reader, hist histograms) error {
 	if err != nil && err != io.EOF {
 		log.Printf("Could not read postfix output, %v", err)
 	}
+	// Initialize all queue buckets to zero.
+	for _, q := range []string{queueActive, queueHold, queueOther, queueIncoming} {
+		hist.sizeHistogram.WithLabelValues(q)
+		hist.ageHistogram.WithLabelValues(q)
+	}
 	if bytes.IndexByte(buf, 0) >= 0 {
-		return s.collectBinaryShowqFromReader(reader)
+		return s.collectBinaryShowqFromReader(reader, hist)
 	}
 	return s.CollectTextualShowqFromScanner(reader, hist)
 }
@@ -168,11 +174,6 @@ func (s *ShowQ) CollectTextualShowqFromScanner(file io.Reader, hist histograms) 
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
 	// Initialize all queue buckets to zero.
-
-	for _, q := range []string{queueActive, queueHold, queueOther} {
-		hist.sizeHistogram.WithLabelValues(q)
-		hist.ageHistogram.WithLabelValues(q)
-	}
 
 	location, err := time.LoadLocation("Local")
 	if err != nil {
@@ -229,7 +230,7 @@ func (s *ShowQ) CollectTextualShowqFromScanner(file io.Reader, hist histograms) 
 
 // scanNullTerminatedEntries is a splitting function for bufio.Scanner
 // to split entries by null bytes.
-func (s *ShowQ) scanNullTerminatedEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
+func scanNullTerminatedEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if i := bytes.IndexByte(data, 0); i >= 0 {
 		// Valid record found.
 		return i + 1, data[0:i], nil
@@ -243,33 +244,9 @@ func (s *ShowQ) scanNullTerminatedEntries(data []byte, atEOF bool) (advance int,
 }
 
 // collectBinaryShowqFromReader parses Postfix's binary showq format.
-func (s *ShowQ) collectBinaryShowqFromReader(file io.Reader) error {
+func (s *ShowQ) collectBinaryShowqFromReader(file io.Reader, hist histograms) error {
 	scanner := bufio.NewScanner(file)
-	scanner.Split(s.scanNullTerminatedEntries)
-
-	// Histograms tracking the messages by size and age.
-	s.sizeHistogram = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "postfix",
-			Name:      "showq_message_size_bytes",
-			Help:      "Size of messages in Postfix's message queue, in bytes",
-			Buckets:   []float64{1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9},
-		},
-		[]string{"queue"})
-	s.ageHistogram = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "postfix",
-			Name:      "showq_message_age_seconds",
-			Help:      "Age of messages in Postfix's message queue, in seconds",
-			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
-		},
-		[]string{"queue"})
-
-	// Initialize all queue buckets to zero.
-	for _, q := range []string{"active", "deferred", "hold", "incoming", "maildrop"} {
-		s.sizeHistogram.WithLabelValues(q)
-		s.ageHistogram.WithLabelValues(q)
-	}
+	scanner.Split(scanNullTerminatedEntries)
 
 	now := float64(time.Now().UnixNano()) / 1e9
 	queue := "unknown"
@@ -285,24 +262,24 @@ func (s *ShowQ) collectBinaryShowqFromReader(file io.Reader) error {
 			return fmt.Errorf("key %q does not have a value", key)
 		}
 		value := scanner.Text()
-
-		if key == "queue_name" {
+		switch key {
+		case "queue_name":
 			// The name of the message queue.
 			queue = value
-		} else if key == "size" {
+		case "size":
 			// Message size in bytes.
 			size, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return err
 			}
-			s.sizeHistogram.WithLabelValues(queue).Observe(size)
-		} else if key == "time" {
+			hist.sizeHistogram.WithLabelValues(queue).Observe(size)
+		case "time":
 			// Message time as a UNIX timestamp.
 			utime, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return err
 			}
-			s.ageHistogram.WithLabelValues(queue).Observe(now - utime)
+			hist.ageHistogram.WithLabelValues(queue).Observe(now - utime)
 		}
 	}
 
