@@ -53,7 +53,7 @@ func NewShowQCollector(path string, upGauge GaugeVec, interval string) *ShowQ {
 				Namespace: "postfix",
 				Name:      "showq_message_age_seconds",
 				Help:      "Age of messages in Postfix's message queue, in seconds",
-				Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
+				Buckets:   []float64{1, 60, 5 * 60, 10 * 60, 3600, 3600 * 6, 3600 * 12, 3600 * 18, 3600 * 24, 2 * 3600 * 24},
 			},
 			[]string{"queue"}),
 	}
