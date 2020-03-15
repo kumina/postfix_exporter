@@ -83,44 +83,13 @@ func (s *ShowQ) StartMetricCollection(ctx context.Context) (<-chan interface{}, 
 	return done, nil
 }
 
-type histograms struct {
-	sizeHistogram prometheus.ObserverVec
-	ageHistogram  prometheus.ObserverVec
-}
-
-func newHistograms() histograms {
-	hist := histograms{
-		sizeHistogram: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Namespace: "postfix",
-				Name:      "showq_message_size_bytes",
-				Help:      "Size of messages in Postfix's message queue, in bytes",
-				Buckets:   []float64{1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9},
-			},
-			[]string{"queue"}),
-		ageHistogram: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Namespace: "postfix",
-				Name:      "showq_message_age_seconds",
-				Help:      "Age of messages in Postfix's message queue, in seconds",
-				Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
-			},
-			[]string{"queue"}),
-	}
-	// Initialize all queue buckets to zero.
-	for _, q := range []string{queueActive, queueHold, queueOther, queueIncoming} {
-		hist.sizeHistogram.WithLabelValues(q)
-		hist.ageHistogram.WithLabelValues(q)
-	}
-	return hist
-}
 func (s *ShowQ) collectMetrics(gauge prometheus.Gauge) {
-	hist := newHistograms()
-	err := s.CollectShowqFromSocket(s.path, hist)
+	hist := NewHistograms()
+	err := CollectShowqFromSocket(s.path, hist)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.sizeHistogram = hist.sizeHistogram
-	s.ageHistogram = hist.ageHistogram
+	s.sizeHistogram = hist.SizeHistogram
+	s.ageHistogram = hist.AgeHistogram
 	if err == nil {
 		gauge.Set(1)
 	} else {
@@ -142,13 +111,13 @@ func (s *ShowQ) Collect(ch chan<- prometheus.Metric) {
 }
 
 // collectShowqFromSocket collects Postfix queue statistics from a socket.
-func (s *ShowQ) CollectShowqFromSocket(path string, hist histograms) error {
+func CollectShowqFromSocket(path string, hist Histograms) error {
 	fd, err := net.Dial("unix", path)
 	if err != nil {
 		return err
 	}
 	defer fd.Close()
-	return s.collectShowqFromReader(fd, hist)
+	return collectShowqFromReader(fd, hist)
 }
 
 // collectShowqFromReader parses the output of Postfix's 'showq' command
@@ -159,19 +128,19 @@ func (s *ShowQ) CollectShowqFromSocket(path string, hist histograms) error {
 // the 'mailq' command. Postfix 3.x uses a binary format, where entries
 // are terminated using null bytes. Auto-detect the format by scanning
 // for null bytes in the first 128 bytes of output.
-func (s *ShowQ) collectShowqFromReader(file io.Reader, hist histograms) error {
+func collectShowqFromReader(file io.Reader, hist Histograms) error {
 	reader := bufio.NewReader(file)
 	buf, err := reader.Peek(128)
 	if err != nil && err != io.EOF {
 		log.Printf("Could not read postfix output, %v", err)
 	}
 	if bytes.IndexByte(buf, 0) >= 0 {
-		return s.collectBinaryShowqFromReader(reader, hist)
+		return CollectBinaryShowqFromReader(reader, hist)
 	}
-	return s.CollectTextualShowqFromScanner(reader, hist)
+	return CollectTextualShowqFromScanner(reader, hist)
 }
 
-func (s *ShowQ) CollectTextualShowqFromScanner(file io.Reader, hist histograms) error {
+func CollectTextualShowqFromScanner(file io.Reader, hist Histograms) error {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
 	// Initialize all queue buckets to zero.
@@ -223,8 +192,8 @@ func (s *ShowQ) CollectTextualShowqFromScanner(file io.Reader, hist histograms) 
 			date = date.AddDate(-1, 0, 0)
 		}
 
-		hist.sizeHistogram.WithLabelValues(queue).Observe(size)
-		hist.ageHistogram.WithLabelValues(queue).Observe(now.Sub(date).Seconds())
+		hist.SizeHistogram.WithLabelValues(queue).Observe(size)
+		hist.AgeHistogram.WithLabelValues(queue).Observe(now.Sub(date).Seconds())
 	}
 	return scanner.Err()
 }
@@ -245,7 +214,7 @@ func scanNullTerminatedEntries(data []byte, atEOF bool) (advance int, token []by
 }
 
 // collectBinaryShowqFromReader parses Postfix's binary showq format.
-func (s *ShowQ) collectBinaryShowqFromReader(file io.Reader, hist histograms) error {
+func CollectBinaryShowqFromReader(file io.Reader, hist Histograms) error {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(scanNullTerminatedEntries)
 
@@ -273,14 +242,14 @@ func (s *ShowQ) collectBinaryShowqFromReader(file io.Reader, hist histograms) er
 			if err != nil {
 				return err
 			}
-			hist.sizeHistogram.WithLabelValues(queue).Observe(size)
+			hist.SizeHistogram.WithLabelValues(queue).Observe(size)
 		case "time":
 			// Message time as a UNIX timestamp.
 			utime, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return err
 			}
-			hist.ageHistogram.WithLabelValues(queue).Observe(now - utime)
+			hist.AgeHistogram.WithLabelValues(queue).Observe(now - utime)
 		}
 	}
 

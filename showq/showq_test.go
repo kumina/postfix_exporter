@@ -1,4 +1,4 @@
-package showq
+package showq_test
 
 import (
 	"bufio"
@@ -12,6 +12,7 @@ import (
 	"path"
 	"testing"
 
+	"github.com/kumina/postfix_exporter/showq"
 	"github.com/kumina/postfix_exporter/testUtils"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -49,11 +50,8 @@ func TestCollectShowqFromReader(t *testing.T) {
 
 			sizeHistogram := prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"active"})
 			ageHistogram := prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"active"})
-			showQ := NewShowQCollector(tt.args.file, prometheus.NewGaugeVec(prometheus.GaugeOpts{}, []string{"path"}), "10s")
-			showQ.ageHistogram = ageHistogram
-			showQ.sizeHistogram = sizeHistogram
-			hist := histograms{ageHistogram: ageHistogram, sizeHistogram: sizeHistogram}
-			if err := showQ.CollectShowqFromSocket(socket, hist); (err != nil) != tt.wantErr {
+			hist := showq.Histograms{AgeHistogram: ageHistogram, SizeHistogram: sizeHistogram}
+			if err := showq.CollectShowqFromSocket(socket, hist); (err != nil) != tt.wantErr {
 				t.Errorf("CollectShowqFromSocket() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			testUtils.AssertSumEquals(t, sizeHistogram, tt.expectedTotalSize, "Expected a lot more data")
