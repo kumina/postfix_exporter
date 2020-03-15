@@ -193,7 +193,8 @@ func CollectTextualShowqFromScanner(file io.Reader, hist Histograms) error {
 		}
 
 		hist.SizeHistogram.WithLabelValues(queue).Observe(size)
-		hist.AgeHistogram.WithLabelValues(queue).Observe(now.Sub(date).Seconds())
+		seconds := now.Sub(date).Seconds()
+		hist.AgeHistogram.WithLabelValues(queue).Observe(seconds)
 	}
 	return scanner.Err()
 }

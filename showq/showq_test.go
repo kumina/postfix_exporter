@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"path"
 	"testing"
 
 	"github.com/kumina/postfix_exporter/showq"
@@ -44,7 +43,8 @@ func TestCollectShowqFromReader(t *testing.T) {
 
 			socket, ch, err := writeToSocket(ctx, tt.args.file)
 			if err != nil {
-				t.Errorf("failed to write to socket: %v", err)
+				cancelFunc()
+				t.Fatalf("failed to write to socket: %v", err)
 			}
 			defer cancelFunc()
 
@@ -74,11 +74,24 @@ func writeToSocket(ctx context.Context, filename string) (string, <-chan interfa
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to read file %s: %v", filename, err)
 	}
-	socketName := path.Join(os.TempDir(), "go.sock")
+	tempFile, err := ioutil.TempFile("", "showq_*.sock")
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get Tempfile: %v", err)
+	}
+	err = tempFile.Close()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to close Tempfile: %v", err)
+	}
+	socketName := tempFile.Name()
+	err = os.Remove(socketName)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to delete Tempfile: %v", err)
+	}
 	var listenConfig net.ListenConfig
 	lsnr, err := listenConfig.Listen(ctx, "unix", socketName)
 	if err != nil {
-		log.Fatal("Listen error: ", err)
+		log.Printf("Listen error: %v", err)
+		return "", nil, fmt.Errorf("listen error: %v", err)
 	}
 
 	go func() {
@@ -109,6 +122,7 @@ func writeToSocket(ctx context.Context, filename string) (string, <-chan interfa
 	go func() {
 		<-ctx.Done()
 		lsnr.Close()
+		os.Remove(tempFile.Name())
 		log.Printf("Closed the listener")
 		ch <- struct{}{}
 	}()
