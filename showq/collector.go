@@ -33,7 +33,7 @@ type ShowQ struct {
 const queueOther = "other"
 const queueHold = "hold"
 const queueActive = "active"
-const queueIncoming = "queueIncoming"
+const queueIncoming = "incoming"
 
 func NewShowQCollector(path string, upGauge GaugeVec, interval string) *ShowQ {
 	return &ShowQ{
