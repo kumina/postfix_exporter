@@ -14,8 +14,8 @@ Mar 14 02:19:56 letterman postfix/smtp[39982]: 7452832B28: to=<example@yahoo.com
 Mar 14 02:19:56 letterman postfix/smtp[42367]: E7D8726A3B: to=<examplet@gmail.com>, relay=gmail-smtp-in.l.google.com[108.177.14.27]:25, delay=2134, delays=2133/0/0.12/0.59, dsn=2.0.0, status=sent (250 2.0.0 OK  1584148796 q7si7179
 Mar 14 03:25:38 letterman postfix/smtp[6656]: 5BECF63C4A: to=<example@icloud.se>, relay=none, delay=44899, delays=44869/0/30/0, dsn=4.4.1, status=deferred (connect to icloud.se[17.253.142.4]:25: Connection timed out)
 `
-	gaugeVec := prometheus.NewGaugeVec(prometheus.GaugeOpts{}, nil)
-	e, err := NewLogCollector(false, gaugeVec)
+	gauge := prometheus.NewGauge(prometheus.GaugeOpts{})
+	e, err := NewLogCollector(false, gauge)
 	if err != nil {
 		fmt.Printf("cannot construct collector: %v", err)
 		return

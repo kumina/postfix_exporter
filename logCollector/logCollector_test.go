@@ -176,8 +176,8 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gaugeVec := prometheus.NewGaugeVec(prometheus.GaugeOpts{}, nil)
-			e, err := NewLogCollector(false, gaugeVec)
+			gauge := prometheus.NewGauge(prometheus.GaugeOpts{})
+			e, err := NewLogCollector(false, gauge)
 			if err != nil {
 				t.Fatalf("cannot construct collector: %v", err)
 			}
