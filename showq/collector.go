@@ -89,7 +89,7 @@ type histograms struct {
 }
 
 func newHistograms() histograms {
-	return histograms{
+	hist := histograms{
 		sizeHistogram: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Namespace: "postfix",
@@ -107,6 +107,12 @@ func newHistograms() histograms {
 			},
 			[]string{"queue"}),
 	}
+	// Initialize all queue buckets to zero.
+	for _, q := range []string{queueActive, queueHold, queueOther, queueIncoming} {
+		hist.sizeHistogram.WithLabelValues(q)
+		hist.ageHistogram.WithLabelValues(q)
+	}
+	return hist
 }
 func (s *ShowQ) collectMetrics(gauge prometheus.Gauge) {
 	hist := newHistograms()
@@ -158,11 +164,6 @@ func (s *ShowQ) collectShowqFromReader(file io.Reader, hist histograms) error {
 	buf, err := reader.Peek(128)
 	if err != nil && err != io.EOF {
 		log.Printf("Could not read postfix output, %v", err)
-	}
-	// Initialize all queue buckets to zero.
-	for _, q := range []string{queueActive, queueHold, queueOther, queueIncoming} {
-		hist.sizeHistogram.WithLabelValues(q)
-		hist.ageHistogram.WithLabelValues(q)
 	}
 	if bytes.IndexByte(buf, 0) >= 0 {
 		return s.collectBinaryShowqFromReader(reader, hist)
