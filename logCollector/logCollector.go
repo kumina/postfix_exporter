@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	journal2 "github.com/kumina/postfix_exporter/journal"
-	"github.com/kumina/postfix_exporter/showq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
@@ -55,7 +54,7 @@ type LogCollector struct {
 	unsupportedLogEntries           *prometheus.CounterVec
 	smtpStatusCount                 *prometheus.CounterVec
 	opendkimSignatureAdded          *prometheus.CounterVec
-	postfixUp                       showq.GaugeVec
+	postfixUp                       prometheus.Gauge
 }
 
 // Patterns for parsing log messages.
@@ -93,11 +92,12 @@ func (e *LogCollector) CollectFromLogLine(line string) {
 		subprocess := logMatches[3]
 		switch subprocess {
 		case "cleanup":
-			if strings.Contains(remainder, ": message-id=<") {
+			switch {
+			case strings.Contains(remainder, ": message-id=<"):
 				e.cleanupProcesses.Inc()
-			} else if strings.Contains(remainder, ": reject: ") {
+			case strings.Contains(remainder, ": reject: "):
 				e.cleanupRejects.Inc()
-			} else {
+			default:
 				e.addToUnsupportedLine(line, subprocess)
 			}
 		case "lmtp":
@@ -211,8 +211,10 @@ func (e *LogCollector) CollectLogFromChannel(ctx context.Context, lines <-chan s
 				logrus.Info("Lines channel closed, stopping to process lines")
 				return
 			}
+			e.postfixUp.Set(1)
 			e.CollectFromLogLine(line)
 		case <-ctx.Done():
+			e.postfixUp.Set(0)
 			logrus.Info("Context closed, stopping to process lines")
 			return
 		}
@@ -220,7 +222,7 @@ func (e *LogCollector) CollectLogFromChannel(ctx context.Context, lines <-chan s
 }
 
 // NewLogCollector creates a new Postfix exporter instance.
-func NewLogCollector(logUnsupportedLines bool, postfixUp showq.GaugeVec) (*LogCollector, error) {
+func NewLogCollector(logUnsupportedLines bool, postfixUp prometheus.Gauge) (*LogCollector, error) {
 	timeBuckets := []float64{1e-3, 1e-2, 1e-1, 1.0, 10, 1 * 60, 1 * 60 * 60, 24 * 60 * 60, 2 * 24 * 60 * 60}
 	return &LogCollector{
 		logUnsupportedLines: logUnsupportedLines,

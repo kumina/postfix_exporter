@@ -60,7 +60,7 @@ func main() {
 	showQ := showq.NewShowQCollector(*postfixShowqPath, postfixUp, *postfixShowqInterval)
 	prometheus.MustRegister(showQ)
 
-	logFileCollector, err := logCollector.NewLogCollector(*logUnsupportedLines, postfixUp)
+	logFileCollector, err := logCollector.NewLogCollector(*logUnsupportedLines, postfixUp.WithLabelValues(*postfixLogfilePath))
 	if err != nil {
 		log.Fatalf("Failed to create LogCollector: %s", err)
 	}
