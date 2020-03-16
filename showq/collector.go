@@ -36,26 +36,13 @@ const queueActive = "active"
 const queueIncoming = "incoming"
 
 func NewShowQCollector(path string, upGauge GaugeVec, interval string) *ShowQ {
+	histograms := NewHistograms()
 	return &ShowQ{
 		path:           path,
 		upGauge:        upGauge,
 		scrapeInterval: interval,
-		sizeHistogram: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Namespace: "postfix",
-				Name:      "showq_message_size_bytes",
-				Help:      "Size of messages in Postfix's message queue, in bytes",
-				Buckets:   []float64{1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9},
-			},
-			[]string{"queue"}),
-		ageHistogram: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Namespace: "postfix",
-				Name:      "showq_message_age_seconds",
-				Help:      "Age of messages in Postfix's message queue, in seconds",
-				Buckets:   []float64{1, 60, 5 * 60, 10 * 60, 3600, 3600 * 6, 3600 * 12, 3600 * 18, 3600 * 24, 2 * 3600 * 24},
-			},
-			[]string{"queue"}),
+		sizeHistogram:  histograms.SizeHistogram,
+		ageHistogram:   histograms.AgeHistogram,
 	}
 }
 

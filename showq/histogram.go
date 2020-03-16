@@ -7,6 +7,12 @@ type Histograms struct {
 	AgeHistogram  prometheus.ObserverVec
 }
 
+const (
+	minute = 60
+	hour   = 60 * minute
+	day    = 24 * hour
+)
+
 func NewHistograms() Histograms {
 	hist := Histograms{
 		SizeHistogram: prometheus.NewHistogramVec(
@@ -22,7 +28,7 @@ func NewHistograms() Histograms {
 				Namespace: "postfix",
 				Name:      "showq_message_age_seconds",
 				Help:      "Age of messages in Postfix's message queue, in seconds",
-				Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
+				Buckets:   []float64{1, minute, 5 * minute, 10 * minute, hour, hour * 6, hour * 12, hour * 18, 1 * day, 2 * day},
 			},
 			[]string{"queue"}),
 	}
