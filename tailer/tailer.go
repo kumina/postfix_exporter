@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/hpcloud/tail"
+	"github.com/nxadm/tail"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
