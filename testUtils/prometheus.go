@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_model/go"
+	prometheusClient "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,7 +17,7 @@ func GetCount(counter prometheus.Collector) (int, []string, error) {
 		close(metricsChan)
 	}()
 	for metric := range metricsChan {
-		metricDto := io_prometheus_client.Metric{}
+		metricDto := prometheusClient.Metric{}
 		if err := metric.Write(&metricDto); err != nil {
 			return 0, nil, fmt.Errorf("failed to write the metric: %v", err)
 		}
@@ -80,7 +80,7 @@ func GetSum(collector prometheus.Collector, sum int) (int, error) {
 			close(metricsChan)
 		}()
 		for metric := range metricsChan {
-			metricDto := io_prometheus_client.Metric{}
+			metricDto := prometheusClient.Metric{}
 			err := metric.Write(&metricDto)
 			if err != nil {
 				return 0, fmt.Errorf("cannot write metric: %v", err)

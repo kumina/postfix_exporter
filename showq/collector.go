@@ -165,9 +165,9 @@ func CollectTextualShowqFromScanner(file io.Reader, hist Histograms, locationNam
 			return err
 		}
 
-		seconds, err2 := ParseDateToSeconds(err, dateMatch, location)
-		if err2 != nil {
-			return err2
+		seconds, err := ParseDateToSeconds(dateMatch, location)
+		if err != nil {
+			return err
 		}
 
 		hist.SizeHistogram.WithLabelValues(queue).Observe(size)
@@ -176,7 +176,7 @@ func CollectTextualShowqFromScanner(file io.Reader, hist Histograms, locationNam
 	return scanner.Err()
 }
 
-func ParseDateToSeconds(err error, dateMatch string, location *time.Location) (float64, error) {
+func ParseDateToSeconds(dateMatch string, location *time.Location) (float64, error) {
 	// Parse the message date. Unfortunately, the
 	// output contains no year number. Assume it
 	// applies to the last year for which the
@@ -252,20 +252,4 @@ func CollectBinaryShowqFromReader(file io.Reader, hist Histograms) error {
 	}
 
 	return scanner.Err()
-}
-
-// Since every time we poll showq we get a complete state, we need to reset the Histogram. This should be reasonably quick
-func (s *ShowQ) resetHistograms() {
-	switch s.sizeHistogram.(type) {
-	case *prometheus.HistogramVec:
-		for _, q := range []string{queueActive, queueHold, queueOther} {
-			s.sizeHistogram.(*prometheus.HistogramVec).DeleteLabelValues(q)
-		}
-	}
-	switch s.ageHistogram.(type) {
-	case *prometheus.HistogramVec:
-		for _, q := range []string{queueActive, queueHold, queueOther} {
-			s.ageHistogram.(*prometheus.HistogramVec).DeleteLabelValues(q)
-		}
-	}
 }

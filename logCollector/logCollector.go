@@ -20,7 +20,6 @@ import (
 	"strconv"
 	"strings"
 
-	journal2 "github.com/kumina/postfix_exporter/journal"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
@@ -28,7 +27,6 @@ import (
 // LogCollector holds the state that should be preserved by the
 // Postfix Prometheus metrics exporter across scrapes.
 type LogCollector struct {
-	journal             *journal2.Journal
 	logUnsupportedLines bool
 
 	// Metrics that should persist after refreshes, based on logs.
