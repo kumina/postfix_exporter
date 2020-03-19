@@ -26,8 +26,8 @@ addons:
   apt:
     packages:
       - libsystemd-dev
-
-script: go test -v ./...
+before_script:
+  - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.24.0
 
 env:
   global:

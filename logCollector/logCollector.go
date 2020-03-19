@@ -221,7 +221,7 @@ func (e *LogCollector) CollectLogFromChannel(ctx context.Context, lines <-chan s
 
 // NewLogCollector creates a new Postfix exporter instance.
 func NewLogCollector(logUnsupportedLines bool, postfixUp prometheus.Gauge) (*LogCollector, error) {
-	timeBuckets := []float64{1e-3, 1e-2, 1e-1, 1.0, 10, 1 * 60, 1 * 60 * 60, 24 * 60 * 60, 2 * 24 * 60 * 60}
+	timeBuckets := []float64{1e-2, 1e-1, 1.0, 10, 1 * 60, 1 * 60 * 60, 4 * 60 * 60, 24 * 60 * 60, 2 * 24 * 60 * 60}
 	return &LogCollector{
 		logUnsupportedLines: logUnsupportedLines,
 		postfixUp:           postfixUp,
