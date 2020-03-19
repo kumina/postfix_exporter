@@ -20,6 +20,10 @@ matrix:
       env: GO111MODULE=on
     - go:  1.11.x
       env: GO111MODULE=on
+      before_script:
+        - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.24.0
+        - go mod vendor
+
     - go: stable
 
 addons:
@@ -28,7 +32,3 @@ addons:
       - libsystemd-dev
 before_script:
   - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $GOPATH/bin v1.24.0
-
-env:
-  global:
-    GO111MODULE: on
