@@ -27,6 +27,8 @@ addons:
     packages:
       - libsystemd-dev
 
+script: go test -v ./...
+
 env:
   global:
     GO111MODULE: on
