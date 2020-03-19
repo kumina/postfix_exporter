@@ -34,6 +34,7 @@ const queueOther = "other"
 const queueHold = "hold"
 const queueActive = "active"
 const queueIncoming = "incoming"
+const queueDeferred = "deferred"
 
 func NewShowQCollector(path string, upGauge GaugeVec, interval string) *ShowQ {
 	histograms := NewHistograms()

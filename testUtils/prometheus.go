@@ -48,7 +48,7 @@ func AssertCounterEquals(t *testing.T, counter prometheus.Collector, expected in
 	if counter != nil {
 		count, _, err := GetCount(counter)
 		if err != nil {
-			t.Fatalf("could not get count: %v", err)
+			t.Errorf("could not get count: %v", err)
 		}
 		assert.Equal(t, expected, count, message)
 	}

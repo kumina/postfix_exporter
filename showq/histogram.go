@@ -33,7 +33,7 @@ func NewHistograms() Histograms {
 			[]string{"queue"}),
 	}
 	// Initialize all queue buckets to zero.
-	for _, q := range []string{queueActive, queueHold, queueOther, queueIncoming} {
+	for _, q := range []string{queueActive, queueHold, queueOther, queueIncoming, queueDeferred} {
 		hist.SizeHistogram.WithLabelValues(q)
 		hist.AgeHistogram.WithLabelValues(q)
 	}

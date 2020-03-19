@@ -1,16 +1,16 @@
 default:	test
 
-test:	*.go
+test:	golangci-lint *.go
 	go test -v -race ./...
 
 fmt:
 	gofmt -w .
 
-imports: *.go
+golangci-lint: *.go
 ifeq (, $(shell which golangci-lint))
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.24.0
 endif
-	golangci-lint run ./...
+	golangci-lint run --fix ./...
 
 mod:
 	go mod tidy
