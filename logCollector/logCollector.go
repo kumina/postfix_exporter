@@ -117,20 +117,22 @@ func (e *LogCollector) CollectFromLogLine(line string) {
 				e.addToUnsupportedLine(line, subprocess)
 			}
 		case "qmgr":
-			if qmgrInsertMatches := qmgrInsertLine.FindStringSubmatch(remainder); qmgrInsertMatches != nil {
+			qmgrInsertMatches := qmgrInsertLine.FindStringSubmatch(remainder)
+			switch {
+			case qmgrInsertMatches != nil:
 				addToHistogram(e.qmgrInsertsSize, qmgrInsertMatches[1], "QMGR size")
 				addToHistogram(e.qmgrInsertsNrcpt, qmgrInsertMatches[2], "QMGR nrcpt")
-			} else if strings.HasSuffix(remainder, ": removed") {
+			case strings.HasSuffix(remainder, ": removed"):
 				e.qmgrRemoves.Inc()
-			} else {
+			default:
 				e.addToUnsupportedLine(line, subprocess)
 			}
 		case "smtp":
 			if smtpMatches := lmtpPipeSMTPLine.FindStringSubmatch(remainder); smtpMatches != nil {
-				addToHistogramVec(e.smtpDelays, smtpMatches[2], "before_queue_manager", "")
-				addToHistogramVec(e.smtpDelays, smtpMatches[3], "queue_manager", "")
-				addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup", "")
-				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission", "")
+				addToHistogramVec(e.smtpDelays, smtpMatches[2], "before_queue_manager", "before_queue_manager")
+				addToHistogramVec(e.smtpDelays, smtpMatches[3], "queue_manager", "queue_manager")
+				addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup", "connection_setup")
+				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission", "transmission")
 				if smtpMatches := smtpStatusLine.FindStringSubmatch(remainder); smtpMatches != nil {
 					e.smtpStatusCount.WithLabelValues(smtpMatches[1]).Inc()
 				}
