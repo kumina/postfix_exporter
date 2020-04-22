@@ -612,6 +612,9 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal, 
 func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- postfixUpDesc
 
+	if e.tailer == nil {
+		return
+	}
 	ch <- e.cleanupProcesses.Desc()
 	ch <- e.cleanupRejects.Desc()
 	ch <- e.cleanupNotAccepted.Desc()
@@ -664,7 +667,7 @@ func (e *PostfixExporter) foreverCollectFromJournal(ctx context.Context) {
 func (e *PostfixExporter) StartMetricCollection(ctx context.Context) {
 	if e.journal != nil {
 		e.foreverCollectFromJournal(ctx)
-	} else {
+	} else if e.tailer != nil {
 		e.CollectLogfileFromFile(ctx)
 	}
 
@@ -697,6 +700,9 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 			e.showqPath)
 	}
 
+	if e.tailer == nil {
+		return
+	}
 	ch <- e.cleanupProcesses
 	ch <- e.cleanupRejects
 	ch <- e.cleanupNotAccepted
