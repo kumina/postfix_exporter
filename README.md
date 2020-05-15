@@ -1,17 +1,27 @@
 # Prometheus Postfix exporter
 
-This repository provides code for a Prometheus metrics exporter
-for [the Postfix mail server](http://www.postfix.org/). This exporter
-provides histogram metrics for the size and age of messages stored in
+Prometheus metrics exporter for [the Postfix mail server](http://www.postfix.org/).
+This exporter provides histogram metrics for the size and age of messages stored in
 the mail queue. It extracts these metrics from Postfix by connecting to
-a UNIX socket under `/var/spool`.
+a UNIX socket under `/var/spool`. It also counts events by parsing Postfix's
+log entries, using regular expression matching. The log entries are retrieved from
+the systemd journal or from a log file.
 
-In addition to that, it counts events by parsing Postfix's log entries,
-using regular expression matching.
-The log entries are retrieved from the systemd journal or from a log file.
+## Options
 
-Please refer to this utility's `main()` function for a list of supported
-command line flags.
+These options can be used when starting the `postfix_exporter`
+
+| Flag                     | Description                                          | Default                           |
+|--------------------------|------------------------------------------------------|-----------------------------------|
+| `--web.listen-address`   | Address to listen on for web interface and telemetry | `9154`                            |
+| `--web.telemetry-path`   | Path under which to expose metrics                   | `/metrics`                        |
+| `--postfix.showq_path`   | Path at which Postfix places its showq socket        | `/var/spool/postfix/public/showq` |
+| `--postfix.logfile_path` | Path where Postfix writes log entries                | `/var/log/maillog`                |
+| `--log.unsupported`      | Log all unsupported lines                            | `false`                           |
+| `--systemd.enable`       | Read from the systemd journal instead of log         | `false`                           |
+| `--systemd.unit`         | Name of the Postfix systemd unit                     | `postfix.service`                 |
+| `--systemd.slice`        | Name of the Postfix systemd slice.                   | `""`                              |
+| `--systemd.journal_path` | Path to the systemd journal                          | `""`                              |
 
 ## Events from log file
 
