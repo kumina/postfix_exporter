@@ -69,7 +69,7 @@ func (f *fileLogSourceFactory) Init(app *kingpin.Application) {
 	app.Flag("postfix.logfile_path", "Path where Postfix writes log entries.").Default("/var/log/maillog").StringVar(&f.path)
 }
 
-func (f *fileLogSourceFactory) New() (LogSourceCloser, error) {
+func (f *fileLogSourceFactory) New(ctx context.Context) (LogSourceCloser, error) {
 	if f.path == "" {
 		return nil, nil
 	}

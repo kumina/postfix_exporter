@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -17,7 +18,7 @@ type LogSourceFactory interface {
 	// New attempts to create a new log source. This is called after
 	// flags have been parsed. Returning `nil, nil`, means the user
 	// didn't want this log source.
-	New() (LogSourceCloser, error)
+	New(context.Context) (LogSourceCloser, error)
 }
 
 type LogSourceCloser interface {
@@ -48,9 +49,9 @@ func InitLogSourceFactories(app *kingpin.Application) {
 // NewLogSourceFromFactories iterates through the factories and
 // attempts to instantiate a log source. The first factory to return
 // success wins.
-func NewLogSourceFromFactories() (LogSourceCloser, error) {
+func NewLogSourceFromFactories(ctx context.Context) (LogSourceCloser, error) {
 	for _, f := range logSourceFactories {
-		src, err := f.New()
+		src, err := f.New(ctx)
 		if err != nil {
 			return nil, err
 		}

@@ -13,6 +13,7 @@ import (
 
 func main() {
 	var (
+		ctx                 = context.Background()
 		app                 = kingpin.New("postfix_exporter", "Prometheus metrics exporter for postfix")
 		listenAddress       = app.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9154").String()
 		metricsPath         = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
@@ -23,7 +24,7 @@ func main() {
 	InitLogSourceFactories(app)
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
-	logSrc, err := NewLogSourceFromFactories()
+	logSrc, err := NewLogSourceFromFactories(ctx)
 	if err != nil {
 		log.Fatalf("Error opening log source: %s", err)
 	}
@@ -53,7 +54,7 @@ func main() {
 			panic(err)
 		}
 	})
-	ctx, cancelFunc := context.WithCancel(context.Background())
+	ctx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()
 	go exporter.StartMetricCollection(ctx)
 	log.Print("Listening on ", *listenAddress)

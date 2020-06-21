@@ -112,7 +112,7 @@ func (f *systemdLogSourceFactory) Init(app *kingpin.Application) {
 	app.Flag("systemd.journal_path", "Path to the systemd journal").Default("").StringVar(&f.path)
 }
 
-func (f *systemdLogSourceFactory) New() (LogSourceCloser, error) {
+func (f *systemdLogSourceFactory) New(ctx context.Context) (LogSourceCloser, error) {
 	if !f.enable {
 		return nil, nil
 	}
