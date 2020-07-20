@@ -612,7 +612,7 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal, 
 func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- postfixUpDesc
 
-	if e.tailer == nil {
+	if e.tailer == nil && e.journal == nil {
 		return
 	}
 	ch <- e.cleanupProcesses.Desc()
@@ -700,7 +700,7 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 			e.showqPath)
 	}
 
-	if e.tailer == nil {
+	if e.tailer == nil && e.journal == nil {
 		return
 	}
 	ch <- e.cleanupProcesses
