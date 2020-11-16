@@ -12,6 +12,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		line           []string
 		logUnsupported bool
 	}
+
 	type wanted struct {
 		removedCount           int
 		saslFailedCount        int
@@ -37,6 +38,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		opendkimSignatureAdded int
 		postfixUp              int
 	}
+
 	tests := []struct {
 		name   string
 		args   args
@@ -222,6 +224,33 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				smtpdConnects:    1,
 				smtpStatusCount:  2,
 			},
+		},
+		{
+			name: "tlsproxy counters",
+			args: args{
+				line: []string{
+					"2020-03-19T16:16:47.883506+00:00 638fbdd7968d postfix/tlsproxy[26371]: DISCONNECT [209.85.233.27]:25",
+					"2020-03-19T16:16:47.986953+00:00 638fbdd7968d postfix/tlsproxy[26371]: CONNECT to [173.194.222.27]:25",
+					"2020-03-19T16:16:48.000693+00:00 638fbdd7968d postfix/tlsproxy[26371]: Trusted TLS connection established to gmail-smtp-in.l.google.com[173.194.222.27]:25: TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits) key-exchange X25519 server-signature RSA-PSS (2048 bits)",
+					"2020-03-19T16:16:48.920090+00:00 638fbdd7968d postfix/tlsproxy[26371]: CONNECT to [93.188.3.14]:25",
+					"2020-03-19T16:16:48.929901+00:00 638fbdd7968d postfix/tlsproxy[26371]: Trusted TLS connection established to mailcluster.loopia.se[93.188.3.14]:25: TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits) key-exchange X25519 server-signature RSA-PSS (2048 bits) server-digest SHA256",
+					"2020-03-19T16:16:49.070051+00:00 638fbdd7968d postfix/tlsproxy[26371]: CONNECT to [173.194.222.27]:25",
+					"2020-03-19T16:16:49.083360+00:00 638fbdd7968d postfix/tlsproxy[26371]: Trusted TLS connection established to gmail-smtp-in.l.google.com[173.194.222.27]:25: TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits) key-exchange X25519 server-signature RSA-PSS (2048 bits)",
+					"2020-03-19T16:16:49.214908+00:00 638fbdd7968d postfix/tlsproxy[26371]: CONNECT to [212.3.0.44]:25",
+					"2020-03-19T16:16:49.242338+00:00 638fbdd7968d postfix/tlsproxy[26371]: Anonymous TLS connection established to mail4.gotanet.se[212.3.0.44]:25: TLSv1 with cipher ADH-AES256-SHA (256/256 bits)",
+					"2020-03-19T16:16:49.329134+00:00 638fbdd7968d postfix/tlsproxy[26371]: DISCONNECT [212.3.0.44]:25",
+					"2020-03-19T16:16:49.345054+00:00 638fbdd7968d postfix/tlsproxy[26371]: DISCONNECT [93.188.3.14]:25",
+					"2020-03-19T16:16:49.383853+00:00 638fbdd7968d postfix/tlsproxy[26371]: CONNECT to [104.47.8.36]:25",
+					"2020-03-19T16:16:49.513395+00:00 638fbdd7968d postfix/tlsproxy[26371]: Trusted TLS connection established to stenungsund-se.mail.protection.outlook.com[104.47.8.36]:25: TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits)",
+					"2020-03-19T16:16:49.592066+00:00 638fbdd7968d postfix/tlsproxy[26371]: CONNECT to [173.194.222.27]:25",
+					"2020-03-19T16:16:49.609308+00:00 638fbdd7968d postfix/tlsproxy[26371]: Trusted TLS connection established to gmail-smtp-in.l.google.com[173.194.222.27]:25: TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits) key-exchange X25519 server-signature RSA-PSS (2048 bits)",
+					"2020-03-19T16:16:49.683983+00:00 638fbdd7968d postfix/tlsproxy[26371]: CONNECT to [173.194.222.27]:25",
+					"2020-03-19T16:16:49.698182+00:00 638fbdd7968d postfix/tlsproxy[26371]: Trusted TLS connection established to gmail-smtp-in.l.google.com[173.194.222.27]:25: TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits) key-exchange X25519 server-signature RSA-PSS (2048 bits)",
+					"2020-03-19T16:16:49.765462+00:00 638fbdd7968d postfix/tlsproxy[26371]: DISCONNECT [173.194.222.27]:25",
+				},
+				logUnsupported: true,
+			},
+			wanted: wanted{},
 		},
 	}
 	for _, tt := range tests {

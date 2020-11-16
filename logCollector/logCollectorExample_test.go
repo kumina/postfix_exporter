@@ -16,22 +16,28 @@ Mar 14 03:25:38 letterman postfix/smtp[6656]: 5BECF63C4A: to=<example@icloud.se>
 `
 	gauge := prometheus.NewGauge(prometheus.GaugeOpts{})
 	e, err := NewLogCollector(false, gauge)
+
 	if err != nil {
 		fmt.Printf("cannot construct collector: %v", err)
 		return
 	}
+
 	for _, line := range strings.Split(lines, "\n") {
 		e.CollectFromLogLine(line)
 	}
+
 	collectors := []prometheus.Collector{e.smtpDelays, e.qmgrInsertsNrcpt, e.qmgrInsertsSize,
 		e.cleanupProcesses, e.unsupportedLogEntries, e.opendkimSignatureAdded, e.smtpConnectionTimedOut,
 		e.qmgrRemoves, e.cleanupNotAccepted, e.cleanupRejects,
 	}
+
 	for _, collector := range collectors {
 		count, desc, err := testUtils.GetCount(collector)
+
 		if err != nil {
 			fmt.Printf("failed to get count for %v: %v\n", desc, err)
 		}
+
 		fmt.Printf("%v: %v\n", desc, count)
 	}
 	//  Output:

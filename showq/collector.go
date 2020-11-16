@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kumina/postfix_exporter/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -38,6 +39,7 @@ const queueDeferred = "deferred"
 
 func NewShowQCollector(path string, upGauge GaugeVec, interval string) *ShowQ {
 	histograms := NewHistograms()
+
 	return &ShowQ{
 		path:           path,
 		upGauge:        upGauge,
@@ -50,13 +52,17 @@ func NewShowQCollector(path string, upGauge GaugeVec, interval string) *ShowQ {
 func (s *ShowQ) StartMetricCollection(ctx context.Context, location string) (<-chan interface{}, error) {
 	done := make(chan interface{})
 	duration, err := time.ParseDuration(s.scrapeInterval)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse duration '%s': %v", s.scrapeInterval, err)
 	}
+
 	go func() {
 		defer close(done)
+
 		gauge := s.upGauge.WithLabelValues(s.path)
 		ticker := time.NewTicker(duration)
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -66,8 +72,8 @@ func (s *ShowQ) StartMetricCollection(ctx context.Context, location string) (<-c
 				s.collectMetrics(gauge, location)
 			}
 		}
-
 	}()
+
 	return done, nil
 }
 
@@ -78,6 +84,7 @@ func (s *ShowQ) collectMetrics(gauge prometheus.Gauge, location string) {
 	defer s.mu.Unlock()
 	s.sizeHistogram = hist.SizeHistogram
 	s.ageHistogram = hist.AgeHistogram
+
 	if err == nil {
 		gauge.Set(1)
 	} else {
@@ -101,10 +108,13 @@ func (s *ShowQ) Collect(ch chan<- prometheus.Metric) {
 // collectShowqFromSocket collects Postfix queue statistics from a socket.
 func CollectShowqFromSocket(path string, hist Histograms, location string) error {
 	fd, err := net.Dial("unix", path)
+
 	if err != nil {
 		return err
 	}
-	defer fd.Close()
+
+	defer utils.CheckedClose(fd, path)
+
 	return collectShowqFromReader(fd, hist, location)
 }
 
@@ -119,12 +129,15 @@ func CollectShowqFromSocket(path string, hist Histograms, location string) error
 func collectShowqFromReader(file io.Reader, hist Histograms, location string) error {
 	reader := bufio.NewReader(file)
 	buf, err := reader.Peek(128)
+
 	if err != nil && err != io.EOF {
 		log.Printf("Could not read postfix output, %v", err)
 	}
+
 	if bytes.IndexByte(buf, 0) >= 0 {
 		return CollectBinaryShowqFromReader(reader, hist)
 	}
+
 	return CollectTextualShowqFromScanner(reader, hist, location)
 }
 
@@ -145,9 +158,11 @@ func CollectTextualShowqFromScanner(file io.Reader, hist Histograms, locationNam
 	for scanner.Scan() {
 		text := scanner.Text()
 		matches := messageLine.FindStringSubmatch(text)
+
 		if matches == nil {
 			continue
 		}
+
 		queueMatch := matches[1]
 		sizeMatch := matches[2]
 		dateMatch := matches[3]
@@ -174,6 +189,7 @@ func CollectTextualShowqFromScanner(file io.Reader, hist Histograms, locationNam
 		hist.SizeHistogram.WithLabelValues(queue).Observe(size)
 		hist.AgeHistogram.WithLabelValues(queue).Observe(seconds)
 	}
+
 	return scanner.Err()
 }
 
@@ -186,12 +202,16 @@ func ParseDateToSeconds(dateMatch string, location *time.Location) (float64, err
 	if err != nil {
 		return 0, err
 	}
+
 	now := time.Now()
 	date = date.AddDate(now.Year(), 0, 0)
+
 	if date.After(now) {
 		date = date.AddDate(-1, 0, 0)
 	}
+
 	seconds := now.Sub(date).Seconds()
+
 	return seconds, nil
 }
 
@@ -199,13 +219,14 @@ func ParseDateToSeconds(dateMatch string, location *time.Location) (float64, err
 // to split entries by null bytes.
 func scanNullTerminatedEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	i := bytes.IndexByte(data, 0)
+
 	switch {
 	case i >= 0:
 		// Valid record found.
 		return i + 1, data[0:i], nil
 	case atEOF && len(data) != 0:
 		// Data at the end of the file without a null terminator.
-		return 0, nil, errors.New("Expected null byte terminator")
+		return 0, nil, errors.New("expected null byte terminator")
 	default:
 		// Request more data.
 		return 0, nil, nil
@@ -219,18 +240,23 @@ func CollectBinaryShowqFromReader(file io.Reader, hist Histograms) error {
 
 	now := float64(time.Now().UnixNano()) / 1e9
 	queue := "unknown"
+
 	for scanner.Scan() {
 		// Parse a key/value entry.
 		key := scanner.Text()
+
 		if len(key) == 0 {
 			// Empty key means a record separator.
 			queue = "unknown"
 			continue
 		}
+
 		if !scanner.Scan() {
 			return fmt.Errorf("key %q does not have a value", key)
 		}
+
 		value := scanner.Text()
+
 		switch key {
 		case "queue_name":
 			// The name of the message queue.
@@ -238,16 +264,20 @@ func CollectBinaryShowqFromReader(file io.Reader, hist Histograms) error {
 		case "size":
 			// Message size in bytes.
 			size, err := strconv.ParseFloat(value, 64)
+
 			if err != nil {
 				return err
 			}
+
 			hist.SizeHistogram.WithLabelValues(queue).Observe(size)
 		case "time":
 			// Message time as a UNIX timestamp.
 			utime, err := strconv.ParseFloat(value, 64)
+
 			if err != nil {
 				return err
 			}
+
 			hist.AgeHistogram.WithLabelValues(queue).Observe(now - utime)
 		}
 	}

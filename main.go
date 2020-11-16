@@ -13,6 +13,7 @@ import (
 	"github.com/kumina/postfix_exporter/logCollector"
 	"github.com/kumina/postfix_exporter/showq"
 	"github.com/kumina/postfix_exporter/tailer"
+	"github.com/kumina/postfix_exporter/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
@@ -31,23 +32,28 @@ func main() {
 		systemdEnable                                 bool
 		systemdUnit, systemdSlice, systemdJournalPath string
 	)
+
 	journal2.SystemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath, app)
 
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	var journal *journal2.Journal
+
 	if systemdEnable {
 		var err error
 		journal, err = journal2.NewJournal(systemdUnit, systemdSlice, systemdJournalPath)
+
 		if err != nil {
 			log.Fatalf("Error opening systemd journal: %s", err)
 		}
-		defer journal.Close()
+
+		defer utils.CheckedClose(journal, "journal")
 		prometheus.MustRegister(journal)
 		log.Println("Reading log events from systemd")
 	} else {
 		log.Printf("Reading log events from %v", *postfixLogfilePath)
 	}
+
 	postfixUp := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "postfix",
@@ -62,9 +68,11 @@ func main() {
 	prometheus.MustRegister(showQ)
 
 	logFileCollector, err := logCollector.NewLogCollector(*logUnsupportedLines, postfixUp.WithLabelValues(*postfixLogfilePath))
+
 	if err != nil {
 		log.Fatalf("Failed to create LogCollector: %s", err)
 	}
+
 	prometheus.MustRegister(logFileCollector)
 
 	http.Handle(*metricsPath, promhttp.Handler())
@@ -81,8 +89,11 @@ func main() {
 			panic(err)
 		}
 	})
+
 	ctx, cancelFunc := context.WithCancel(context.Background())
+
 	defer cancelFunc()
+
 	var logLines <-chan string
 
 	if journal == nil {
@@ -96,9 +107,11 @@ func main() {
 
 	logCollectionDone := logFileCollector.StartMetricCollection(ctx, logLines)
 	showqCollectionDone, err := showQ.StartMetricCollection(ctx, *postfixShowqLocation)
+
 	if err != nil {
 		log.Printf("failed to start showq metrics collection: %v", err)
 	}
+
 	log.Print("Listening on ", *listenAddress)
 
 	var srv = http.Server{
@@ -107,6 +120,7 @@ func main() {
 		WriteTimeout: 5 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+
 	go func() {
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			// Error starting or closing listener:
@@ -118,12 +132,17 @@ func main() {
 	signal.Notify(sigint, os.Interrupt)
 	<-sigint
 	log.Print("Shutting down")
+
 	timeoutCtx, c := context.WithTimeout(ctx, 15*time.Second)
+
 	defer c()
+
 	err = srv.Shutdown(timeoutCtx)
+
 	if err != nil {
 		log.Print(err)
 	}
+
 	cancelFunc()
 	<-logCollectionDone
 	<-showqCollectionDone

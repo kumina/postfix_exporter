@@ -1,3 +1,6 @@
 linters:
   enable:
     - goimports
+    - gofmt
+    - scopelint
+    - wsl

@@ -155,6 +155,6 @@ func (j *Journal) CollectLogLinesFromJournal(ctx context.Context) (<-chan string
 	return lines, nil
 }
 
-func (j *Journal) Close() {
-	j.journal.Close()
+func (j *Journal) Close() error {
+	return j.journal.Close()
 }

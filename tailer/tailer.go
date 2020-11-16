@@ -20,7 +20,9 @@ func TailLog(ctx context.Context, filename string) (<-chan string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to start tailer: %v", err)
 	}
+
 	lines := make(chan string)
+
 	go func() {
 		counter := prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace:   "postfix_exporter",
@@ -30,26 +32,32 @@ func TailLog(ctx context.Context, filename string) (<-chan string, error) {
 			ConstLabels: prometheus.Labels{"source": "tailer"},
 		})
 		prometheus.MustRegister(counter)
+
 		for {
 			select {
 			case <-ctx.Done():
 				err := tailer.Stop()
 				logrus.Printf("failed to stop tailing: %v", err)
 				close(lines)
+
 				return
 			case line, ok := <-tailer.Lines:
 				if !ok {
 					logrus.Printf("tailer seems to be finished.")
 					close(lines)
+
 					return
 				}
+
 				if line.Err != nil {
 					logrus.Printf("failed to receive line: %v", line.Err)
 				}
+
 				counter.Inc()
 				lines <- line.Text
 			}
 		}
 	}()
+
 	return lines, nil
 }

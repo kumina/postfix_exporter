@@ -37,5 +37,6 @@ func NewHistograms() Histograms {
 		hist.SizeHistogram.WithLabelValues(q)
 		hist.AgeHistogram.WithLabelValues(q)
 	}
+
 	return hist
 }

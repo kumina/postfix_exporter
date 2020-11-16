@@ -82,8 +82,10 @@ func (e *LogCollector) CollectFromLogLine(line string) {
 		e.addToUnsupportedLine(line, "")
 		return
 	}
+
 	process := logMatches[1]
 	remainder := logMatches[4]
+
 	switch process {
 	case "postfix":
 		// Group patterns to check by Postfix service.
@@ -118,6 +120,7 @@ func (e *LogCollector) CollectFromLogLine(line string) {
 			}
 		case "qmgr":
 			qmgrInsertMatches := qmgrInsertLine.FindStringSubmatch(remainder)
+
 			switch {
 			case qmgrInsertMatches != nil:
 				addToHistogram(e.qmgrInsertsSize, qmgrInsertMatches[1], "QMGR size")
@@ -133,6 +136,7 @@ func (e *LogCollector) CollectFromLogLine(line string) {
 				addToHistogramVec(e.smtpDelays, smtpMatches[3], "queue_manager", "queue_manager")
 				addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup", "connection_setup")
 				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission", "transmission")
+
 				if smtpMatches := smtpStatusLine.FindStringSubmatch(remainder); smtpMatches != nil {
 					e.smtpStatusCount.WithLabelValues(smtpMatches[1]).Inc()
 				}
@@ -184,21 +188,26 @@ func (e *LogCollector) addToUnsupportedLine(line string, subprocess string) {
 	if e.logUnsupportedLines {
 		log.Printf("Unsupported Line: %v", line)
 	}
+
 	e.unsupportedLogEntries.WithLabelValues(subprocess).Inc()
 }
 
 func addToHistogram(h prometheus.Histogram, value, fieldName string) {
 	float, err := strconv.ParseFloat(value, 64)
+
 	if err != nil {
 		log.Printf("Couldn't convert value '%s' for %v: %v", value, fieldName, err)
 	}
+
 	h.Observe(float)
 }
 func addToHistogramVec(h *prometheus.HistogramVec, value, fieldName string, labels ...string) {
 	float, err := strconv.ParseFloat(value, 64)
+
 	if err != nil {
 		log.Printf("Couldn't convert value '%s' for %v: %v", value, fieldName, err)
 	}
+
 	h.WithLabelValues(labels...).Observe(float)
 }
 
@@ -211,11 +220,13 @@ func (e *LogCollector) CollectLogFromChannel(ctx context.Context, lines <-chan s
 				logrus.Info("Lines channel closed, stopping to process lines")
 				return
 			}
+
 			e.postfixUp.Set(1)
 			e.CollectFromLogLine(line)
 		case <-ctx.Done():
 			e.postfixUp.Set(0)
 			logrus.Info("Context closed, stopping to process lines")
+
 			return
 		}
 	}
@@ -224,6 +235,7 @@ func (e *LogCollector) CollectLogFromChannel(ctx context.Context, lines <-chan s
 // NewLogCollector creates a new Postfix exporter instance.
 func NewLogCollector(logUnsupportedLines bool, postfixUp prometheus.Gauge) (*LogCollector, error) {
 	timeBuckets := []float64{1e-2, 1e-1, 1.0, 10, 1 * 60, 1 * 60 * 60, 4 * 60 * 60, 24 * 60 * 60, 2 * 24 * 60 * 60}
+
 	return &LogCollector{
 		logUnsupportedLines: logUnsupportedLines,
 		postfixUp:           postfixUp,
@@ -368,10 +380,12 @@ func NewLogCollector(logUnsupportedLines bool, postfixUp prometheus.Gauge) (*Log
 
 func (e *LogCollector) StartMetricCollection(ctx context.Context, lines <-chan string) <-chan interface{} {
 	done := make(chan interface{})
+
 	go func() {
 		defer close(done)
 		e.CollectLogFromChannel(ctx, lines)
 	}()
+
 	return done
 }
 
