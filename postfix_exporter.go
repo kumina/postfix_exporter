@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hpcloud/tail"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -42,8 +41,7 @@ var (
 // Postfix Prometheus metrics exporter across scrapes.
 type PostfixExporter struct {
 	showqPath           string
-	journal             *Journal
-	tailer              *tail.Tail
+	logSrc              LogSource
 	logUnsupportedLines bool
 
 	// Metrics that should persist after refreshes, based on logs.
@@ -70,6 +68,16 @@ type PostfixExporter struct {
 	unsupportedLogEntries           *prometheus.CounterVec
 	smtpStatusDeferred              prometheus.Counter
 	opendkimSignatureAdded          *prometheus.CounterVec
+}
+
+// A LogSource is an interface to read log lines.
+type LogSource interface {
+	// Path returns a representation of the log location.
+	Path() string
+
+	// Read returns the next log line. Returns `io.EOF` at the end of
+	// the log.
+	Read(context.Context) (string, error)
 }
 
 // CollectShowqFromReader parses the output of Postfix's 'showq' command
@@ -420,50 +428,12 @@ func addToHistogramVec(h *prometheus.HistogramVec, value, fieldName string, labe
 	h.WithLabelValues(labels...).Observe(float)
 }
 
-// CollectLogfileFromFile tails a Postfix log file and collects entries from it.
-func (e *PostfixExporter) CollectLogfileFromFile(ctx context.Context) {
-	gaugeVec := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "postfix",
-			Subsystem: "",
-			Name:      "up",
-			Help:      "Whether scraping Postfix's metrics was successful.",
-		},
-		[]string{"path"})
-	gauge := gaugeVec.WithLabelValues(e.tailer.Filename)
-	for {
-		select {
-		case line := <-e.tailer.Lines:
-			e.CollectFromLogLine(line.Text)
-		case <-ctx.Done():
-			gauge.Set(0)
-			return
-		}
-		gauge.Set(1)
-	}
-}
-
 // NewPostfixExporter creates a new Postfix exporter instance.
-func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal, logUnsupportedLines bool) (*PostfixExporter, error) {
-	var tailer *tail.Tail
-	if logfilePath != "" {
-		var err error
-		tailer, err = tail.TailFile(logfilePath, tail.Config{
-			ReOpen:    true,                               // reopen the file if it's rotated
-			MustExist: true,                               // fail immediately if the file is missing or has incorrect permissions
-			Follow:    true,                               // run in follow mode
-			Location:  &tail.SeekInfo{Whence: io.SeekEnd}, // seek to end of file
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	timeBuckets := []float64{1e-3, 1e-2, 1e-1, 1.0, 10, 1 * 60, 1 * 60 * 60, 24 * 60 * 60, 2 * 24 * 60 * 60}
+func NewPostfixExporter(showqPath string, logSrc LogSource, logUnsupportedLines bool) (*PostfixExporter, error) {
 	return &PostfixExporter{
 		logUnsupportedLines: logUnsupportedLines,
 		showqPath:           showqPath,
-		tailer:              tailer,
-		journal:             journal,
+		logSrc:              logSrc,
 
 		cleanupProcesses: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "postfix",
@@ -613,7 +583,7 @@ func NewPostfixExporter(showqPath string, logfilePath string, journal *Journal, 
 func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- postfixUpDesc
 
-	if e.tailer == nil && e.journal == nil {
+	if e.logSrc == nil {
 		return
 	}
 	ch <- e.cleanupProcesses.Desc()
@@ -641,38 +611,12 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	e.opendkimSignatureAdded.Describe(ch)
 }
 
-func (e *PostfixExporter) foreverCollectFromJournal(ctx context.Context) {
-	gauge := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "postfix",
-			Subsystem: "",
-			Name:      "up",
-			Help:      "Whether scraping Postfix's metrics was successful.",
-		},
-		[]string{"path"}).WithLabelValues(e.journal.Path)
-	select {
-	case <-ctx.Done():
-		gauge.Set(0)
-		return
-	default:
-		err := e.CollectLogfileFromJournal()
-		if err != nil {
-			log.Printf("Couldn't read journal: %v", err)
-			gauge.Set(0)
-		} else {
-			gauge.Set(1)
-		}
-	}
-}
-
 func (e *PostfixExporter) StartMetricCollection(ctx context.Context) {
-	if e.journal != nil {
-		e.foreverCollectFromJournal(ctx)
-	} else if e.tailer != nil {
-		e.CollectLogfileFromFile(ctx)
+	if e.logSrc == nil {
+		return
 	}
 
-	prometheus.NewGaugeVec(
+	gaugeVec := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "postfix",
 			Subsystem: "",
@@ -680,7 +624,20 @@ func (e *PostfixExporter) StartMetricCollection(ctx context.Context) {
 			Help:      "Whether scraping Postfix's metrics was successful.",
 		},
 		[]string{"path"})
-	return
+	gauge := gaugeVec.WithLabelValues(e.logSrc.Path())
+	defer gauge.Set(0)
+
+	for {
+		line, err := e.logSrc.Read(ctx)
+		if err != nil {
+			if err != io.EOF {
+				log.Printf("Couldn't read journal: %v", err)
+			}
+			return
+		}
+		e.CollectFromLogLine(line)
+		gauge.Set(1)
+	}
 }
 
 // Collect metrics from Postfix's showq socket and its log file.
@@ -701,7 +658,7 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 			e.showqPath)
 	}
 
-	if e.tailer == nil && e.journal == nil {
+	if e.logSrc == nil {
 		return
 	}
 	ch <- e.cleanupProcesses

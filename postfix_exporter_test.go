@@ -1,18 +1,17 @@
 package main
 
 import (
-	"github.com/hpcloud/tail"
+	"testing"
+
 	"github.com/prometheus/client_golang/prometheus"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 	type fields struct {
 		showqPath                       string
-		journal                         *Journal
-		tailer                          *tail.Tail
+		logSrc                          LogSource
 		cleanupProcesses                prometheus.Counter
 		cleanupRejects                  prometheus.Counter
 		cleanupNotAccepted              prometheus.Counter
@@ -173,8 +172,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &PostfixExporter{
 				showqPath:                       tt.fields.showqPath,
-				journal:                         tt.fields.journal,
-				tailer:                          tt.fields.tailer,
+				logSrc:                          tt.fields.logSrc,
 				cleanupProcesses:                tt.fields.cleanupProcesses,
 				cleanupRejects:                  tt.fields.cleanupRejects,
 				cleanupNotAccepted:              tt.fields.cleanupNotAccepted,
