@@ -5,7 +5,7 @@ This exporter provides histogram metrics for the size and age of messages stored
 the mail queue. It extracts these metrics from Postfix by connecting to
 a UNIX socket under `/var/spool`. It also counts events by parsing Postfix's
 log entries, using regular expression matching. The log entries are retrieved from
-the systemd journal, the Docker logs, or from a log file.
+the systemd journal or from a log file.
 
 ## Options
 
@@ -18,24 +18,10 @@ These options can be used when starting the `postfix_exporter`
 | `--postfix.showq_path`   | Path at which Postfix places its showq socket        | `/var/spool/postfix/public/showq` |
 | `--postfix.logfile_path` | Path where Postfix writes log entries                | `/var/log/maillog`                |
 | `--log.unsupported`      | Log all unsupported lines                            | `false`                           |
-| `--docker.enable`        | Read from the Docker logs instead of a file          | `false`                           |
-| `--docker.container.id`  | The container to read Docker logs from               | `postfix`                         |
-| `--systemd.enable`       | Read from the systemd journal instead of file        | `false`                           |
+| `--systemd.enable`       | Read from the systemd journal instead of log         | `false`                           |
 | `--systemd.unit`         | Name of the Postfix systemd unit                     | `postfix.service`                 |
 | `--systemd.slice`        | Name of the Postfix systemd slice.                   | `""`                              |
 | `--systemd.journal_path` | Path to the systemd journal                          | `""`                              |
-
-## Events from Docker
-
-Postfix servers running in a [Docker](https://www.docker.com/)
-container can be monitored using the `--docker.enable` flag. The
-default container ID is `postfix`, but can be customized with the
-`--docker.container.id` flag.
-
-The default is to connect to the local Docker, but this can be
-customized using [the `DOCKER_HOST` and
-similar](https://pkg.go.dev/github.com/docker/docker/client?tab=doc#NewEnvClient)
-environment variables.
 
 ## Events from log file
 
