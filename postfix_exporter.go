@@ -455,7 +455,7 @@ func NewPostfixExporter(showqPath string, logSrc LogSource, logUnsupportedLines 
 				Namespace: "postfix",
 				Name:      "lmtp_delivery_delay_seconds",
 				Help:      "LMTP message processing time in seconds.",
-				Buckets:   []float64{1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3},
+				Buckets:   timeBuckets,
 			},
 			[]string{"stage"}),
 		pipeDelays: prometheus.NewHistogramVec(
@@ -463,7 +463,7 @@ func NewPostfixExporter(showqPath string, logSrc LogSource, logUnsupportedLines 
 				Namespace: "postfix",
 				Name:      "pipe_delivery_delay_seconds",
 				Help:      "Pipe message processing time in seconds.",
-				Buckets:   []float64{1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3},
+				Buckets:   timeBuckets,
 			},
 			[]string{"relay", "stage"}),
 		qmgrInsertsNrcpt: prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -488,7 +488,7 @@ func NewPostfixExporter(showqPath string, logSrc LogSource, logUnsupportedLines 
 				Namespace: "postfix",
 				Name:      "smtp_delivery_delay_seconds",
 				Help:      "SMTP message processing time in seconds.",
-				Buckets:   []float64{1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3},
+				Buckets:   timeBuckets,
 			},
 			[]string{"stage"}),
 		smtpTLSConnects: prometheus.NewCounterVec(
