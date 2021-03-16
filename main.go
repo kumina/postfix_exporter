@@ -13,26 +13,36 @@ import (
 
 func main() {
 	var (
-		ctx                 = context.Background()
-		app                 = kingpin.New("postfix_exporter", "Prometheus metrics exporter for postfix")
-		listenAddress       = app.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9154").String()
-		metricsPath         = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
-		postfixShowqPath    = app.Flag("postfix.showq_path", "Path at which Postfix places its showq socket.").Default("/var/spool/postfix/public/showq").String()
-		logUnsupportedLines = app.Flag("log.unsupported", "Log all unsupported lines.").Bool()
+		app                                           = kingpin.New("postfix_exporter", "Prometheus metrics exporter for postfix")
+		listenAddress                                 = app.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9154").String()
+		metricsPath                                   = app.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+		postfixShowqPath                              = app.Flag("postfix.showq_path", "Path at which Postfix places its showq socket.").Default("/var/spool/postfix/public/showq").String()
+		postfixLogfilePath                            = app.Flag("postfix.logfile_path", "Path where Postfix writes log entries.").Default("/var/log/maillog").String()
+		logUnsupportedLines                           = app.Flag("log.unsupported", "Log all unsupported lines.").Bool()
+		systemdEnable                                 bool
+		systemdUnit, systemdSlice, systemdJournalPath string
 	)
+	systemdFlags(&systemdEnable, &systemdUnit, &systemdSlice, &systemdJournalPath, app)
 
-	InitLogSourceFactories(app)
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
-	logSrc, err := NewLogSourceFromFactories(ctx)
-	if err != nil {
-		log.Fatalf("Error opening log source: %s", err)
+	var journal *Journal
+	if systemdEnable {
+		var err error
+		journal, err = NewJournal(systemdUnit, systemdSlice, systemdJournalPath)
+		if err != nil {
+			log.Fatalf("Error opening systemd journal: %s", err)
+		}
+		defer journal.Close()
+		log.Println("Reading log events from systemd")
+	} else {
+		log.Printf("Reading log events from %v", *postfixLogfilePath)
 	}
-	defer logSrc.Close()
 
 	exporter, err := NewPostfixExporter(
 		*postfixShowqPath,
-		logSrc,
+		*postfixLogfilePath,
+		journal,
 		*logUnsupportedLines,
 	)
 	if err != nil {
@@ -54,7 +64,7 @@ func main() {
 			panic(err)
 		}
 	})
-	ctx, cancelFunc := context.WithCancel(ctx)
+	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
 	go exporter.StartMetricCollection(ctx)
 	log.Print("Listening on ", *listenAddress)
