@@ -33,6 +33,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		smtpdRejects                    *prometheus.CounterVec
 		smtpdSASLAuthenticationFailures prometheus.Counter
 		smtpdTLSConnects                *prometheus.CounterVec
+		bounceNonDelivery               prometheus.Counter
 		unsupportedLogEntries           *prometheus.CounterVec
 	}
 	type args struct {
@@ -42,6 +43,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		outgoingTLS            int
 		smtpdMessagesProcessed int
 		smtpMessagesProcessed  int
+		bounceNonDelivery  int
 	}
 	tests := []struct {
 		name   string
@@ -185,12 +187,14 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 					"Dec 29 03:03:48 mail postfix/bounce[9321]: 732BB407C3: sender non-delivery notification: 5DE184083C",
 				},
 				smtpMessagesProcessed:  2,
+				bounceNonDelivery: 1,
 			},
 			fields: fields{
 				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
 				smtpDelays: prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"stage"}),
 				smtpStatusDeferred: prometheus.NewCounter(prometheus.CounterOpts{}),
 				smtpProcesses: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
+				bounceNonDelivery: prometheus.NewCounter(prometheus.CounterOpts{}),
 			},
 		},
 	}
@@ -220,6 +224,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				smtpdRejects:                    tt.fields.smtpdRejects,
 				smtpdSASLAuthenticationFailures: tt.fields.smtpdSASLAuthenticationFailures,
 				smtpdTLSConnects:                tt.fields.smtpdTLSConnects,
+				bounceNonDelivery:               tt.fields.bounceNonDelivery,
 				unsupportedLogEntries:           tt.fields.unsupportedLogEntries,
 				logUnsupportedLines:             true,
 			}
@@ -231,6 +236,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			assertCounterEquals(t, e.smtpTLSConnects, tt.args.outgoingTLS, "Wrong number of TLS connections counted")
 			assertCounterEquals(t, e.smtpdProcesses, tt.args.smtpdMessagesProcessed, "Wrong number of smtpd messages processed")
 			assertCounterEquals(t, e.smtpProcesses, tt.args.smtpMessagesProcessed, "Wrong number of smtp messages processed")
+			assertCounterEquals(t, e.bounceNonDelivery, tt.args.bounceNonDelivery, "Wrong number of non delivery notifications")
 		})
 	}
 }

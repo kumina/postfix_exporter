@@ -71,6 +71,7 @@ type PostfixExporter struct {
 	// same as smtpProcesses{status=deferred}, kept for compatibility
 	smtpStatusDeferred              prometheus.Counter
 	opendkimSignatureAdded          *prometheus.CounterVec
+	bounceNonDelivery               prometheus.Counter
 }
 
 // A LogSource is an interface to read log lines.
@@ -302,6 +303,7 @@ var (
 	smtpdSASLAuthenticationFailuresLine = regexp.MustCompile(`^warning: \S+: SASL \S+ authentication failed: `)
 	smtpdTLSLine                        = regexp.MustCompile(`^(\S+) TLS connection established from \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)`)
 	opendkimSignatureAdded              = regexp.MustCompile(`^[\w\d]+: DKIM-Signature field added \(s=(\w+), d=(.*)\)$`)
+	bounceNonDeliveryLine               = regexp.MustCompile(`: sender non-delivery notification: `)
 )
 
 // CollectFromLogline collects metrict from a Postfix log line.
@@ -396,6 +398,12 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 				e.smtpdTLSConnects.WithLabelValues(smtpdTLSMatches[1:]...).Inc()
 			} else {
 				e.addToUnsupportedLine(line, subprocess)
+			}
+		case "bounce":
+			if bounceMatches := bounceNonDeliveryLine.FindStringSubmatch(remainder); bounceMatches != nil {
+				e.bounceNonDelivery.Inc()
+			} else {
+				e.addToUnsupportedLine(line, process)
 			}
 		default:
 			e.addToUnsupportedLine(line, subprocess)
@@ -590,6 +598,11 @@ func NewPostfixExporter(showqPath string, logSrc LogSource, logUnsupportedLines 
 			},
 			[]string{"subject", "domain"},
 		),
+		bounceNonDelivery: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "postfix",
+			Name:      "bounce_non_delivery_notification_total",
+			Help:      "Total number of non delivery notification sent by bounce.",
+		}),
 	}, nil
 }
 
@@ -624,6 +637,7 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	e.unsupportedLogEntries.Describe(ch)
 	e.smtpConnectionTimedOut.Describe(ch)
 	e.opendkimSignatureAdded.Describe(ch)
+	ch <- e.bounceNonDelivery.Desc()
 }
 
 func (e *PostfixExporter) StartMetricCollection(ctx context.Context) {
@@ -700,4 +714,5 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 	e.unsupportedLogEntries.Collect(ch)
 	ch <- e.smtpConnectionTimedOut
 	e.opendkimSignatureAdded.Collect(ch)
+	ch <- e.bounceNonDelivery
 }
