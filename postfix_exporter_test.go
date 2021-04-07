@@ -23,6 +23,8 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		smtpDelays                      *prometheus.HistogramVec
 		smtpTLSConnects                 *prometheus.CounterVec
 		smtpDeferreds                   prometheus.Counter
+		smtpStatusDeferred              prometheus.Counter
+		smtpProcesses                   *prometheus.CounterVec
 		smtpdConnects                   prometheus.Counter
 		smtpdDisconnects                prometheus.Counter
 		smtpdFCrDNSErrors               prometheus.Counter
@@ -39,6 +41,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		saslFailedCount        int
 		outgoingTLS            int
 		smtpdMessagesProcessed int
+		smtpMessagesProcessed  int
 	}
 	tests := []struct {
 		name   string
@@ -117,6 +120,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			fields: fields{
 				smtpdSASLAuthenticationFailures: prometheus.NewCounter(prometheus.CounterOpts{}),
 				unsupportedLogEntries:           prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+				smtpProcesses:                   prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
 			},
 		},
 		{
@@ -146,10 +150,12 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				removedCount:    0,
 				saslFailedCount: 0,
 				outgoingTLS:     2,
+				smtpdMessagesProcessed: 0,
 			},
 			fields: fields{
 				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
 				smtpTLSConnects:       prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"Verified", "TLSv1.2", "ECDHE-RSA-AES256-GCM-SHA384", "256", "256"}),
+				smtpProcesses:         prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
 			},
 		},
 		{
@@ -162,9 +168,29 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				saslFailedCount:        0,
 				outgoingTLS:            0,
 				smtpdMessagesProcessed: 0,
+				smtpMessagesProcessed:  1,
 			},
 			fields: fields{
 				smtpDelays: prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"stage"}),
+				smtpProcesses: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
+			},
+		},
+		{
+			name: "Testing different smtp statuses",
+			args: args{
+				line: []string{
+					"Dec 29 02:54:09 mail postfix/smtp[7648]: 732BB407C3: host mail.domain.com[1.1.1.1] said: 451 DT:SPM 163 mx13,P8CowECpNVM_oEVaenoEAQ--.23796S3 1514512449, please try again 15min later (in reply to end of DATA command)",
+					"Dec 29 02:54:12 mail postfix/smtp[7648]: 732BB407C3: to=<redacted@domain.com>, relay=mail.domain.com[1.1.1.1]:25, delay=6.2, delays=0.1/0/5.2/0.87, dsn=4.0.0, status=deferred (host mail.domain.com[1.1.1.1] said: 451 DT:SPM 163 mx40,WsCowAAnEhlCoEVa5GjcAA--.20089S3 1514512452, please try again 15min later (in reply to end of DATA command))",
+					"Dec 29 03:03:48 mail postfix/smtp[8492]: 732BB407C3: to=<redacted@domain.com>, relay=mail.domain.com[1.1.1.1]:25, delay=582, delays=563/16/1.7/0.81, dsn=5.0.0, status=bounced (host mail.domain.com[1.1.1.1] said: 554 DT:SPM 163 mx9,O8CowEDJVFKCokVaRhz+AA--.26016S3 1514513028,please see http://mail.domain.com/help/help_spam.htm?ip= (in reply to end of DATA command))",
+					"Dec 29 03:03:48 mail postfix/bounce[9321]: 732BB407C3: sender non-delivery notification: 5DE184083C",
+				},
+				smtpMessagesProcessed:  2,
+			},
+			fields: fields{
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+				smtpDelays: prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"stage"}),
+				smtpStatusDeferred: prometheus.NewCounter(prometheus.CounterOpts{}),
+				smtpProcesses: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
 			},
 		},
 	}
@@ -184,6 +210,8 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				smtpDelays:                      tt.fields.smtpDelays,
 				smtpTLSConnects:                 tt.fields.smtpTLSConnects,
 				smtpDeferreds:                   tt.fields.smtpDeferreds,
+				smtpStatusDeferred:              tt.fields.smtpStatusDeferred,
+				smtpProcesses:                   tt.fields.smtpProcesses,
 				smtpdConnects:                   tt.fields.smtpdConnects,
 				smtpdDisconnects:                tt.fields.smtpdDisconnects,
 				smtpdFCrDNSErrors:               tt.fields.smtpdFCrDNSErrors,
@@ -202,6 +230,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			assertCounterEquals(t, e.smtpdSASLAuthenticationFailures, tt.args.saslFailedCount, "Wrong number of Sasl counter counted")
 			assertCounterEquals(t, e.smtpTLSConnects, tt.args.outgoingTLS, "Wrong number of TLS connections counted")
 			assertCounterEquals(t, e.smtpdProcesses, tt.args.smtpdMessagesProcessed, "Wrong number of smtpd messages processed")
+			assertCounterEquals(t, e.smtpProcesses, tt.args.smtpMessagesProcessed, "Wrong number of smtp messages processed")
 		})
 	}
 }

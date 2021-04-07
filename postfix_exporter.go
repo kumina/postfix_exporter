@@ -56,6 +56,8 @@ type PostfixExporter struct {
 	smtpDelays                      *prometheus.HistogramVec
 	smtpTLSConnects                 *prometheus.CounterVec
 	smtpConnectionTimedOut          prometheus.Counter
+	smtpProcesses                    *prometheus.CounterVec
+	// should be the same as smtpProcesses{status=deferred}, kept for compatibility, but this doesn't work !
 	smtpDeferreds                   prometheus.Counter
 	smtpdConnects                   prometheus.Counter
 	smtpdDisconnects                prometheus.Counter
@@ -66,6 +68,7 @@ type PostfixExporter struct {
 	smtpdSASLAuthenticationFailures prometheus.Counter
 	smtpdTLSConnects                *prometheus.CounterVec
 	unsupportedLogEntries           *prometheus.CounterVec
+	// same as smtpProcesses{status=deferred}, kept for compatibility
 	smtpStatusDeferred              prometheus.Counter
 	opendkimSignatureAdded          *prometheus.CounterVec
 }
@@ -289,7 +292,7 @@ var (
 	logLine                             = regexp.MustCompile(` ?(postfix|opendkim)(/(\w+))?\[\d+\]: (.*)`)
 	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
 	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
-	smtpStatusDeferredLine              = regexp.MustCompile(`, status=deferred`)
+	smtpStatusLine                      = regexp.MustCompile(`, status=(\w+) `)
 	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)`)
 	smtpConnectionTimedOut              = regexp.MustCompile(`^connect\s+to\s+(.*)\[(.*)\]:(\d+):\s+(Connection timed out)$`)
 	smtpdFCrDNSErrorsLine               = regexp.MustCompile(`^warning: hostname \S+ does not resolve to address `)
@@ -359,8 +362,11 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 				addToHistogramVec(e.smtpDelays, smtpMatches[3], "queue_manager", "")
 				addToHistogramVec(e.smtpDelays, smtpMatches[4], "connection_setup", "")
 				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission", "")
-				if smtpMatches := smtpStatusDeferredLine.FindStringSubmatch(remainder); smtpMatches != nil {
-					e.smtpStatusDeferred.Inc()
+				if smtpStatusMatches := smtpStatusLine.FindStringSubmatch(remainder); smtpStatusMatches != nil {
+					e.smtpProcesses.WithLabelValues(smtpStatusMatches[1]).Inc()
+					if smtpStatusMatches[1] == "deferred" {
+						e.smtpStatusDeferred.Inc()
+					}
 				}
 			} else if smtpTLSMatches := smtpTLSLine.FindStringSubmatch(remainder); smtpTLSMatches != nil {
 				e.smtpTLSConnects.WithLabelValues(smtpTLSMatches[1:]...).Inc()
@@ -504,6 +510,13 @@ func NewPostfixExporter(showqPath string, logSrc LogSource, logUnsupportedLines 
 			Name:      "smtp_deferred_messages_total",
 			Help:      "Total number of messages that have been deferred on SMTP.",
 		}),
+		smtpProcesses: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "postfix",
+				Name:      "smtp_messages_processed_total",
+				Help:      "Total number of messages that have been processed by the smtp process.",
+			},
+			[]string{"status"}),
 		smtpConnectionTimedOut: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "postfix",
 			Name:      "smtp_connection_timed_out_total",
@@ -598,6 +611,7 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	e.smtpDelays.Describe(ch)
 	e.smtpTLSConnects.Describe(ch)
 	ch <- e.smtpDeferreds.Desc()
+	e.smtpProcesses.Describe(ch)
 	ch <- e.smtpdConnects.Desc()
 	ch <- e.smtpdDisconnects.Desc()
 	ch <- e.smtpdFCrDNSErrors.Desc()
@@ -673,6 +687,7 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 	e.smtpDelays.Collect(ch)
 	e.smtpTLSConnects.Collect(ch)
 	ch <- e.smtpDeferreds
+	e.smtpProcesses.Collect(ch)
 	ch <- e.smtpdConnects
 	ch <- e.smtpdDisconnects
 	ch <- e.smtpdFCrDNSErrors
