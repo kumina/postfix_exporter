@@ -34,6 +34,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		smtpdSASLAuthenticationFailures prometheus.Counter
 		smtpdTLSConnects                *prometheus.CounterVec
 		bounceNonDelivery               prometheus.Counter
+		virtualDelivered                prometheus.Counter
 		unsupportedLogEntries           *prometheus.CounterVec
 	}
 	type args struct {
@@ -44,6 +45,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		smtpdMessagesProcessed int
 		smtpMessagesProcessed  int
 		bounceNonDelivery  int
+		virtualDelivered       int
 	}
 	tests := []struct {
 		name   string
@@ -197,6 +199,18 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				bounceNonDelivery: prometheus.NewCounter(prometheus.CounterOpts{}),
 			},
 		},
+		{
+			name: "Testing virtual delivered",
+			args: args{
+				line: []string{
+					"Apr  7 15:35:20 123-mail postfix/virtual[20235]: 199041033BE: to=<me@domain.fr>, relay=virtual, delay=0.08, delays=0.08/0/0/0, dsn=2.0.0, status=sent (delivered to maildir)",
+				},
+				virtualDelivered: 1,
+			},
+			fields: fields{
+				virtualDelivered: prometheus.NewCounter(prometheus.CounterOpts{}),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -225,6 +239,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				smtpdSASLAuthenticationFailures: tt.fields.smtpdSASLAuthenticationFailures,
 				smtpdTLSConnects:                tt.fields.smtpdTLSConnects,
 				bounceNonDelivery:               tt.fields.bounceNonDelivery,
+				virtualDelivered:                tt.fields.virtualDelivered,
 				unsupportedLogEntries:           tt.fields.unsupportedLogEntries,
 				logUnsupportedLines:             true,
 			}
@@ -237,6 +252,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			assertCounterEquals(t, e.smtpdProcesses, tt.args.smtpdMessagesProcessed, "Wrong number of smtpd messages processed")
 			assertCounterEquals(t, e.smtpProcesses, tt.args.smtpMessagesProcessed, "Wrong number of smtp messages processed")
 			assertCounterEquals(t, e.bounceNonDelivery, tt.args.bounceNonDelivery, "Wrong number of non delivery notifications")
+			assertCounterEquals(t, e.virtualDelivered, tt.args.virtualDelivered, "Wrong number of delivered mails")
 		})
 	}
 }

@@ -72,6 +72,7 @@ type PostfixExporter struct {
 	smtpStatusDeferred              prometheus.Counter
 	opendkimSignatureAdded          *prometheus.CounterVec
 	bounceNonDelivery               prometheus.Counter
+	virtualDelivered                prometheus.Counter
 }
 
 // A LogSource is an interface to read log lines.
@@ -405,6 +406,12 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 			} else {
 				e.addToUnsupportedLine(line, process)
 			}
+		case "virtual":
+			if strings.HasSuffix(remainder, ", status=sent (delivered to maildir)") {
+				e.virtualDelivered.Inc()
+			} else {
+				e.addToUnsupportedLine(line, process)
+			}
 		default:
 			e.addToUnsupportedLine(line, subprocess)
 		}
@@ -603,6 +610,11 @@ func NewPostfixExporter(showqPath string, logSrc LogSource, logUnsupportedLines 
 			Name:      "bounce_non_delivery_notification_total",
 			Help:      "Total number of non delivery notification sent by bounce.",
 		}),
+		virtualDelivered: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "postfix",
+			Name:      "virtual_delivered_total",
+			Help:      "Total number of mail delivered to a virtual mailbox.",
+		}),
 	}, nil
 }
 
@@ -638,6 +650,7 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	e.smtpConnectionTimedOut.Describe(ch)
 	e.opendkimSignatureAdded.Describe(ch)
 	ch <- e.bounceNonDelivery.Desc()
+	ch <- e.virtualDelivered.Desc()
 }
 
 func (e *PostfixExporter) StartMetricCollection(ctx context.Context) {
@@ -715,4 +728,5 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 	ch <- e.smtpConnectionTimedOut
 	e.opendkimSignatureAdded.Collect(ch)
 	ch <- e.bounceNonDelivery
+	ch <- e.virtualDelivered
 }
