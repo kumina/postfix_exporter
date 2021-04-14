@@ -20,6 +20,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		qmgrInsertsNrcpt                prometheus.Histogram
 		qmgrInsertsSize                 prometheus.Histogram
 		qmgrRemoves                     prometheus.Counter
+		qmgrExpires                     prometheus.Counter
 		smtpDelays                      *prometheus.HistogramVec
 		smtpTLSConnects                 *prometheus.CounterVec
 		smtpDeferreds                   prometheus.Counter
@@ -40,6 +41,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 	type args struct {
 		line                   []string
 		removedCount           int
+		expiredCount           int
 		saslFailedCount        int
 		outgoingTLS            int
 		smtpdMessagesProcessed int
@@ -108,6 +110,19 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			fields: fields{
 				qmgrRemoves:           prometheus.NewCounter(prometheus.CounterOpts{}),
 				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+			},
+		},
+		{
+			name: "qmgr expired",
+			args: args{
+				line: []string{
+					"Apr 10 14:50:16 mail postfix/qmgr[3663]: BACE842E72: from=<noreply@domain.com>, status=expired, returned to sender",
+					"Apr 10 14:50:16 mail postfix/qmgr[3663]: BACE842E73: from=<noreply@domain.com>, status=force-expired, returned to sender",
+				},
+				expiredCount:    2,
+			},
+			fields: fields{
+				qmgrExpires:           prometheus.NewCounter(prometheus.CounterOpts{}),
 			},
 		},
 		{
@@ -225,6 +240,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				qmgrInsertsNrcpt:                tt.fields.qmgrInsertsNrcpt,
 				qmgrInsertsSize:                 tt.fields.qmgrInsertsSize,
 				qmgrRemoves:                     tt.fields.qmgrRemoves,
+				qmgrExpires:                     tt.fields.qmgrExpires,
 				smtpDelays:                      tt.fields.smtpDelays,
 				smtpTLSConnects:                 tt.fields.smtpTLSConnects,
 				smtpDeferreds:                   tt.fields.smtpDeferreds,
@@ -247,6 +263,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				e.CollectFromLogLine(line)
 			}
 			assertCounterEquals(t, e.qmgrRemoves, tt.args.removedCount, "Wrong number of lines counted")
+			assertCounterEquals(t, e.qmgrExpires, tt.args.expiredCount, "Wrong number of qmgr expired lines counted")
 			assertCounterEquals(t, e.smtpdSASLAuthenticationFailures, tt.args.saslFailedCount, "Wrong number of Sasl counter counted")
 			assertCounterEquals(t, e.smtpTLSConnects, tt.args.outgoingTLS, "Wrong number of TLS connections counted")
 			assertCounterEquals(t, e.smtpdProcesses, tt.args.smtpdMessagesProcessed, "Wrong number of smtpd messages processed")

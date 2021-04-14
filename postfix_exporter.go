@@ -53,6 +53,7 @@ type PostfixExporter struct {
 	qmgrInsertsNrcpt                prometheus.Histogram
 	qmgrInsertsSize                 prometheus.Histogram
 	qmgrRemoves                     prometheus.Counter
+	qmgrExpires                     prometheus.Counter
 	smtpDelays                      *prometheus.HistogramVec
 	smtpTLSConnects                 *prometheus.CounterVec
 	smtpConnectionTimedOut          prometheus.Counter
@@ -294,6 +295,7 @@ var (
 	logLine                             = regexp.MustCompile(` ?(postfix|opendkim)(/(\w+))?\[\d+\]: (.*)`)
 	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
 	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
+	qmgrExpiredLine                     = regexp.MustCompile(`:.*, status=(expired|force-expired), returned to sender`)
 	smtpStatusLine                      = regexp.MustCompile(`, status=(\w+) `)
 	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)`)
 	smtpConnectionTimedOut              = regexp.MustCompile(`^connect\s+to\s+(.*)\[(.*)\]:(\d+):\s+(Connection timed out)$`)
@@ -356,6 +358,8 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 				addToHistogram(e.qmgrInsertsNrcpt, qmgrInsertMatches[2], "QMGR nrcpt")
 			} else if strings.HasSuffix(remainder, ": removed") {
 				e.qmgrRemoves.Inc()
+			} else if qmgrExpired := qmgrExpiredLine.FindStringSubmatch(remainder); qmgrExpired != nil {
+				e.qmgrExpires.Inc()
 			} else {
 				e.addToUnsupportedLine(line, subprocess)
 			}
@@ -505,6 +509,11 @@ func NewPostfixExporter(showqPath string, logSrc LogSource, logUnsupportedLines 
 			Name:      "qmgr_messages_removed_total",
 			Help:      "Total number of messages removed from mail queues.",
 		}),
+		qmgrExpires: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "postfix",
+			Name:      "qmgr_messages_expired_total",
+			Help:      "Total number of messages expired from mail queues.",
+		}),
 		smtpDelays: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Namespace: "postfix",
@@ -633,6 +642,7 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.qmgrInsertsNrcpt.Desc()
 	ch <- e.qmgrInsertsSize.Desc()
 	ch <- e.qmgrRemoves.Desc()
+	ch <- e.qmgrExpires.Desc()
 	e.smtpDelays.Describe(ch)
 	e.smtpTLSConnects.Describe(ch)
 	ch <- e.smtpDeferreds.Desc()
@@ -711,6 +721,7 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 	ch <- e.qmgrInsertsNrcpt
 	ch <- e.qmgrInsertsSize
 	ch <- e.qmgrRemoves
+	ch <- e.qmgrExpires
 	e.smtpDelays.Collect(ch)
 	e.smtpTLSConnects.Collect(ch)
 	ch <- e.smtpDeferreds
