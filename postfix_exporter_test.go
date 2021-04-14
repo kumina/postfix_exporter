@@ -48,6 +48,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		smtpMessagesProcessed  int
 		bounceNonDelivery  int
 		virtualDelivered       int
+		unsupportedLogEntries  []string
 	}
 	tests := []struct {
 		name   string
@@ -65,7 +66,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			},
 			fields: fields{
 				qmgrRemoves:           prometheus.NewCounter(prometheus.CounterOpts{}),
-				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
 			},
 		},
 		{
@@ -109,7 +110,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			},
 			fields: fields{
 				qmgrRemoves:           prometheus.NewCounter(prometheus.CounterOpts{}),
-				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
 			},
 		},
 		{
@@ -138,7 +139,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			},
 			fields: fields{
 				smtpdSASLAuthenticationFailures: prometheus.NewCounter(prometheus.CounterOpts{}),
-				unsupportedLogEntries:           prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
 				smtpProcesses:                   prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
 			},
 		},
@@ -155,7 +156,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				smtpdMessagesProcessed: 2,
 			},
 			fields: fields{
-				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
 				smtpdProcesses:        prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"sasl_method"}),
 			},
 		},
@@ -172,7 +173,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				smtpdMessagesProcessed: 0,
 			},
 			fields: fields{
-				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
 				smtpTLSConnects:       prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"Verified", "TLSv1.2", "ECDHE-RSA-AES256-GCM-SHA384", "256", "256"}),
 				smtpProcesses:         prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
 			},
@@ -207,7 +208,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				bounceNonDelivery: 1,
 			},
 			fields: fields{
-				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"process"}),
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
 				smtpDelays: prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"stage"}),
 				smtpStatusDeferred: prometheus.NewCounter(prometheus.CounterOpts{}),
 				smtpProcesses: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
@@ -224,6 +225,25 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			},
 			fields: fields{
 				virtualDelivered: prometheus.NewCounter(prometheus.CounterOpts{}),
+			},
+		},
+		{
+			name: "Testing levels of unsupported entries",
+			args: args{
+				line: []string{
+					"Feb 14 19:05:25 123-mail postfix/smtpd[1517]: table hash:/etc/postfix/virtual_mailbox_maps(0,lock|fold_fix) has changed -- restarting",
+				    "Mar 16 12:28:02 123-mail postfix/smtpd[16268]: fatal: file /etc/postfix/main.cf: parameter default_privs: unknown user name value: nobody",
+					"Mar 16 23:30:44 123-mail postfix/qmgr[29980]: warning: please avoid flushing the whole queue when you have",
+					"Mar 16 23:30:44 123-mail postfix/qmgr[29980]: warning: lots of deferred mail, that is bad for performance",
+				},
+				unsupportedLogEntries: []string{
+					`label:<name:"level" value:"" > label:<name:"service" value:"smtpd" > counter:<value:1 > `,
+					`label:<name:"level" value:"fatal" > label:<name:"service" value:"smtpd" > counter:<value:1 > `,
+					`label:<name:"level" value:"warning" > label:<name:"service" value:"qmgr" > counter:<value:2 > `,
+				},
+			},
+			fields: fields{
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
 			},
 		},
 	}
@@ -270,6 +290,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			assertCounterEquals(t, e.smtpProcesses, tt.args.smtpMessagesProcessed, "Wrong number of smtp messages processed")
 			assertCounterEquals(t, e.bounceNonDelivery, tt.args.bounceNonDelivery, "Wrong number of non delivery notifications")
 			assertCounterEquals(t, e.virtualDelivered, tt.args.virtualDelivered, "Wrong number of delivered mails")
+			assertVecMetricsEquals(t, e.unsupportedLogEntries, tt.args.unsupportedLogEntries, "Wrong number of unsupportedLogEntries")
 		})
 	}
 }
@@ -307,5 +328,21 @@ func assertCounterEquals(t *testing.T, counter prometheus.Collector, expected in
 		default:
 			t.Fatal("Type not implemented")
 		}
+	}
+}
+func assertVecMetricsEquals(t *testing.T, counter *prometheus.CounterVec, expected []string, message string) {
+	if expected != nil {
+		metricsChan := make(chan prometheus.Metric)
+		go func() {
+			counter.Collect(metricsChan)
+			close(metricsChan)
+		}()
+		var res []string
+		for metric := range metricsChan {
+			metricDto := io_prometheus_client.Metric{}
+			metric.Write(&metricDto)
+			res = append(res, metricDto.String())
+		}
+		assert.Equal(t, expected, res, message)
 	}
 }
