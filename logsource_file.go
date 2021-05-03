@@ -66,7 +66,7 @@ type fileLogSourceFactory struct {
 }
 
 func (f *fileLogSourceFactory) Init(app *kingpin.Application) {
-	app.Flag("postfix.logfile_path", "Path where Postfix writes log entries.").Default("/var/log/maillog").StringVar(&f.path)
+	app.Flag("postfix.logfile_path", "Path where Postfix writes log entries.").Default("/var/log/mail.log").StringVar(&f.path)
 }
 
 func (f *fileLogSourceFactory) New(ctx context.Context) (LogSourceCloser, error) {

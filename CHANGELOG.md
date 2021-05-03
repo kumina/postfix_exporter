@@ -1,3 +1,7 @@
+## 0.1.3 / 2021-05-02
+
+* [BUGFIX] Fix default for mail log path (/var/log/mail.log)
+
 ## 0.1.2 / 2018-05-04
 
 * [ENHANCEMENT] Build tag for systemd

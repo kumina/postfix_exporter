@@ -16,7 +16,7 @@ These options can be used when starting the `postfix_exporter`
 | `--web.listen-address`   | Address to listen on for web interface and telemetry | `9154`                            |
 | `--web.telemetry-path`   | Path under which to expose metrics                   | `/metrics`                        |
 | `--postfix.showq_path`   | Path at which Postfix places its showq socket        | `/var/spool/postfix/public/showq` |
-| `--postfix.logfile_path` | Path where Postfix writes log entries                | `/var/log/maillog`                |
+| `--postfix.logfile_path` | Path where Postfix writes log entries                | `/var/log/mail.log`               |
 | `--log.unsupported`      | Log all unsupported lines                            | `false`                           |
 | `--docker.enable`        | Read from the Docker logs instead of a file          | `false`                           |
 | `--docker.container.id`  | The container to read Docker logs from               | `postfix`                         |
