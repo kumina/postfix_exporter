@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"github.com/alecthomas/kingpin"
-	"github.com/hpcloud/tail"
+	"github.com/nxadm/tail"
 )
 
 // A FileLogSource can read lines from a file.
