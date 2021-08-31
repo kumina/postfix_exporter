@@ -1,6 +1,6 @@
 #!/bin/sh
 
-docker run -i -v `pwd`:/postfix_exporter golang:1.12 /bin/sh << 'EOF'
+docker run -i -v `pwd`:/postfix_exporter golang:1.16 /bin/sh << 'EOF'
 set -ex
 
 # Install prerequisites for the build process.
