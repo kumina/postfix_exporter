@@ -1,0 +1,33 @@
+FROM golang:1.16 AS builder
+
+# avoid downloading the dependencies on succesive builds
+RUN apt-get update -qq && apt-get install -qqy \
+  build-essential \
+  libsystemd-dev
+
+RUN git clone https://github.com/kumina/postfix_exporter.git
+
+WORKDIR /go/postfix_exporter
+
+# This project is not released often (latest is 2019-02-15) but still maintaned 
+RUN git reset 580003c91bbfdca0ffab80fb07639d77a28a7f22
+
+RUN go mod download
+RUN go mod verify
+
+
+
+# Force the go compiler to use modules
+ENV GO111MODULE=on
+RUN go test
+RUN go build -o /bin/postfix_exporter
+
+FROM debian:bullseye-20211011-slim
+EXPOSE 9154
+WORKDIR /
+COPY --from=builder /bin/postfix_exporter /bin/
+
+RUN groupadd -r lifen && useradd --no-log-init -r -g lifen lifen
+USER lifen
+
+ENTRYPOINT ["/bin/postfix_exporter"]

@@ -1,0 +1,28 @@
+version: 2
+jobs:
+  build-postfix_exporter:
+    docker:
+      - image: circleci/buildpack-deps:focal
+    working_directory: ~/base
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: Build Docker postfix_exporter
+          command: |
+            if [[ $VERSION ]]
+            then DOCKER_TAG=$VERSION
+            else DOCKER_TAG=$CIRCLE_BRANCH-$CIRCLE_BUILD_NUM
+            fi
+            echo $DOCKER_TAG
+            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+            docker build -f lifen/Dockerfile.postfix_exporter -t honestica/postfix_exporter:$DOCKER_TAG .
+            docker push honestica/postfix_exporter:$DOCKER_TAG
+
+workflows:
+  version: 2
+  master:
+    jobs:
+      - build-postfix_exporter:
+          context: org-global
