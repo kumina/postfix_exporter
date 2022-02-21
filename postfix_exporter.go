@@ -573,6 +573,11 @@ func NewPostfixExporter(showqPath string, logSrc LogSource, logUnsupportedLines 
 			Name:      "smtp_status_deferred",
 			Help:      "Total number of messages deferred.",
 		}),
+		smtpStatusBounced: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "postfix",
+			Name:      "smtp_status_bounced",
+			Help:      "Total number of messages bounced.",
+		}),
 		opendkimSignatureAdded: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "opendkim",
@@ -611,6 +616,7 @@ func (e *PostfixExporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.smtpdSASLAuthenticationFailures.Desc()
 	e.smtpdTLSConnects.Describe(ch)
 	ch <- e.smtpStatusDeferred.Desc()
+	ch <- e.smtpStatusBounced.Desc()
 	e.unsupportedLogEntries.Describe(ch)
 	e.smtpConnectionTimedOut.Describe(ch)
 	e.opendkimSignatureAdded.Describe(ch)
