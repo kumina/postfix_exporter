@@ -292,7 +292,7 @@ func CollectShowqFromSocket(path string, ch chan<- prometheus.Metric) error {
 
 // Patterns for parsing log messages.
 var (
-	logLine                             = regexp.MustCompile(` ?(postfix|opendkim)(/(\w+))?\[\d+\]: ((?:(warning|error|fatal|panic): )?.*)`)
+	logLine                             = regexp.MustCompile(` ?(postfix|opendkim)/?(.*/(\w+))?\[\d+\]: ((?:(warning|error|fatal|panic): )?.*)`)
 	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
 	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
 	qmgrExpiredLine                     = regexp.MustCompile(`:.*, status=(expired|force-expired), returned to sender`)
