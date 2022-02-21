@@ -363,8 +363,7 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission", "")
 				if smtpMatches := smtpStatusDeferredLine.FindStringSubmatch(remainder); smtpMatches != nil {
 					e.smtpStatusDeferred.Inc()
-				}
-				if smtpMatches := smtpStatusBouncedLine.FindStringSubmatch(remainder); smtpMatches != nil {
+				} else if smtpMatches := smtpStatusBouncedLine.FindStringSubmatch(remainder); smtpMatches != nil {
 					e.smtpStatusBounced.Inc()
 				}
 			} else if smtpTLSMatches := smtpTLSLine.FindStringSubmatch(remainder); smtpTLSMatches != nil {
