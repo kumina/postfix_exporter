@@ -67,6 +67,7 @@ type PostfixExporter struct {
 	smtpdTLSConnects                *prometheus.CounterVec
 	unsupportedLogEntries           *prometheus.CounterVec
 	smtpStatusDeferred              prometheus.Counter
+	smtpStatusBounced               prometheus.Counter
 	opendkimSignatureAdded          *prometheus.CounterVec
 }
 
@@ -290,6 +291,7 @@ var (
 	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
 	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
 	smtpStatusDeferredLine              = regexp.MustCompile(`, status=deferred`)
+	smtpStatusBouncedLine               = regexp.MustCompile(`, status=bounced`)
 	smtpTLSLine                         = regexp.MustCompile(`^(\S+) TLS connection established to \S+: (\S+) with cipher (\S+) \((\d+)/(\d+) bits\)`)
 	smtpConnectionTimedOut              = regexp.MustCompile(`^connect\s+to\s+(.*)\[(.*)\]:(\d+):\s+(Connection timed out)$`)
 	smtpdFCrDNSErrorsLine               = regexp.MustCompile(`^warning: hostname \S+ does not resolve to address `)
@@ -361,6 +363,9 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 				addToHistogramVec(e.smtpDelays, smtpMatches[5], "transmission", "")
 				if smtpMatches := smtpStatusDeferredLine.FindStringSubmatch(remainder); smtpMatches != nil {
 					e.smtpStatusDeferred.Inc()
+				}
+				if smtpMatches := smtpStatusBouncedLine.FindStringSubmatch(remainder); smtpMatches != nil {
+					e.smtpStatusBounced.Inc()
 				}
 			} else if smtpTLSMatches := smtpTLSLine.FindStringSubmatch(remainder); smtpTLSMatches != nil {
 				e.smtpTLSConnects.WithLabelValues(smtpTLSMatches[1:]...).Inc()
