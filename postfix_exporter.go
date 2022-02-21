@@ -692,6 +692,7 @@ func (e *PostfixExporter) Collect(ch chan<- prometheus.Metric) {
 	ch <- e.smtpdSASLAuthenticationFailures
 	e.smtpdTLSConnects.Collect(ch)
 	ch <- e.smtpStatusDeferred
+	ch <- e.smtpStatusBounced
 	e.unsupportedLogEntries.Collect(ch)
 	ch <- e.smtpConnectionTimedOut
 	e.opendkimSignatureAdded.Collect(ch)
