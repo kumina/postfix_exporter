@@ -634,7 +634,6 @@ func (e *PostfixExporter) StartMetricCollection(ctx context.Context) {
 			if err != io.EOF {
 				log.Printf("Couldn't read journal: %v", err)
 			}
-			return
 		}
 		e.CollectFromLogLine(line)
 		gauge.Set(1)
