@@ -1,0 +1,11 @@
+version: "2.4"
+
+services:
+  postfix-exporter:
+    image: postfix-exporter:latest
+    build:
+      context: .
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --docker.enable
+

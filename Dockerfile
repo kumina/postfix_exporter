@@ -1,14 +1,11 @@
-FROM golang:1.16 AS builder
+FROM golang:1.16-alpine AS builder
 WORKDIR /src
-
-# avoid downloading the dependencies on succesive builds
-RUN apt-get update -qq && apt-get install -qqy \
-  build-essential \
-  libsystemd-dev
 
 COPY go.mod go.sum ./
 RUN go mod download
 RUN go mod verify
+
+RUN apk add --no-cache --virtual .build-deps build-base elogind-dev
 
 COPY . .
 
@@ -17,7 +14,7 @@ ENV GO111MODULE=on
 RUN go test
 RUN go build -o /bin/postfix_exporter
 
-FROM debian:latest
+FROM alpine
 EXPOSE 9154
 WORKDIR /
 COPY --from=builder /bin/postfix_exporter /bin/
