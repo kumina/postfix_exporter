@@ -45,19 +45,19 @@ type PostfixExporter struct {
 	logUnsupportedLines bool
 
 	// Metrics that should persist after refreshes, based on logs.
-	cleanupProcesses                prometheus.Counter
-	cleanupRejects                  prometheus.Counter
-	cleanupNotAccepted              prometheus.Counter
-	lmtpDelays                      *prometheus.HistogramVec
-	pipeDelays                      *prometheus.HistogramVec
-	qmgrInsertsNrcpt                prometheus.Histogram
-	qmgrInsertsSize                 prometheus.Histogram
-	qmgrRemoves                     prometheus.Counter
-	qmgrExpires                     prometheus.Counter
-	smtpDelays                      *prometheus.HistogramVec
-	smtpTLSConnects                 *prometheus.CounterVec
-	smtpConnectionTimedOut          prometheus.Counter
-	smtpProcesses                    *prometheus.CounterVec
+	cleanupProcesses       prometheus.Counter
+	cleanupRejects         prometheus.Counter
+	cleanupNotAccepted     prometheus.Counter
+	lmtpDelays             *prometheus.HistogramVec
+	pipeDelays             *prometheus.HistogramVec
+	qmgrInsertsNrcpt       prometheus.Histogram
+	qmgrInsertsSize        prometheus.Histogram
+	qmgrRemoves            prometheus.Counter
+	qmgrExpires            prometheus.Counter
+	smtpDelays             *prometheus.HistogramVec
+	smtpTLSConnects        *prometheus.CounterVec
+	smtpConnectionTimedOut prometheus.Counter
+	smtpProcesses          *prometheus.CounterVec
 	// should be the same as smtpProcesses{status=deferred}, kept for compatibility, but this doesn't work !
 	smtpDeferreds                   prometheus.Counter
 	smtpdConnects                   prometheus.Counter
@@ -70,10 +70,10 @@ type PostfixExporter struct {
 	smtpdTLSConnects                *prometheus.CounterVec
 	unsupportedLogEntries           *prometheus.CounterVec
 	// same as smtpProcesses{status=deferred}, kept for compatibility
-	smtpStatusDeferred              prometheus.Counter
-	opendkimSignatureAdded          *prometheus.CounterVec
-	bounceNonDelivery               prometheus.Counter
-	virtualDelivered                prometheus.Counter
+	smtpStatusDeferred     prometheus.Counter
+	opendkimSignatureAdded *prometheus.CounterVec
+	bounceNonDelivery      prometheus.Counter
+	virtualDelivered       prometheus.Counter
 }
 
 // A LogSource is an interface to read log lines.
@@ -108,6 +108,7 @@ func CollectShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
 
 // CollectTextualShowqFromReader parses Postfix's textual showq output.
 func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
+	timeBuckets := []float64{1e-3, 1e-2, 1e-1, 1.0, 10, 1 * 60, 1 * 60 * 60, 24 * 60 * 60, 2 * 24 * 60 * 60}
 
 	// Histograms tracking the messages by size and age.
 	sizeHistogram := prometheus.NewHistogramVec(
@@ -123,7 +124,7 @@ func CollectTextualShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) 
 			Namespace: "postfix",
 			Name:      "showq_message_age_seconds",
 			Help:      "Age of messages in Postfix's message queue, in seconds",
-			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
+			Buckets:   timeBuckets,
 		},
 		[]string{"queue"})
 
@@ -213,6 +214,7 @@ func ScanNullTerminatedEntries(data []byte, atEOF bool) (advance int, token []by
 
 // CollectBinaryShowqFromReader parses Postfix's binary showq format.
 func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) error {
+	timeBuckets := []float64{1e-3, 1e-2, 1e-1, 1.0, 10, 1 * 60, 1 * 60 * 60, 24 * 60 * 60, 2 * 24 * 60 * 60}
 	scanner := bufio.NewScanner(file)
 	scanner.Split(ScanNullTerminatedEntries)
 
@@ -230,7 +232,7 @@ func CollectBinaryShowqFromReader(file io.Reader, ch chan<- prometheus.Metric) e
 			Namespace: "postfix",
 			Name:      "showq_message_age_seconds",
 			Help:      "Age of messages in Postfix's message queue, in seconds",
-			Buckets:   []float64{1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8},
+			Buckets:   timeBuckets,
 		},
 		[]string{"queue"})
 
