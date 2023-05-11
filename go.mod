@@ -6,7 +6,7 @@ require (
 	github.com/Microsoft/go-winio v0.5.0 // indirect
 	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/coreos/go-systemd/v22 v22.0.0
-	github.com/docker/distribution v2.7.1+incompatible // indirect
+	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/docker v1.13.1
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
