@@ -46,7 +46,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 		outgoingTLS            int
 		smtpdMessagesProcessed int
 		smtpMessagesProcessed  int
-		bounceNonDelivery  int
+		bounceNonDelivery      int
 		virtualDelivered       int
 		unsupportedLogEntries  []string
 	}
@@ -120,10 +120,10 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 					"Apr 10 14:50:16 mail postfix/qmgr[3663]: BACE842E72: from=<noreply@domain.com>, status=expired, returned to sender",
 					"Apr 10 14:50:16 mail postfix/qmgr[3663]: BACE842E73: from=<noreply@domain.com>, status=force-expired, returned to sender",
 				},
-				expiredCount:    2,
+				expiredCount: 2,
 			},
 			fields: fields{
-				qmgrExpires:           prometheus.NewCounter(prometheus.CounterOpts{}),
+				qmgrExpires: prometheus.NewCounter(prometheus.CounterOpts{}),
 			},
 		},
 		{
@@ -139,7 +139,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			},
 			fields: fields{
 				smtpdSASLAuthenticationFailures: prometheus.NewCounter(prometheus.CounterOpts{}),
-				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
+				unsupportedLogEntries:           prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
 				smtpProcesses:                   prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
 			},
 		},
@@ -167,9 +167,9 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 					"Jul 24 04:38:17 mail postfix/smtp[30582]: Verified TLS connection established to gmail-smtp-in.l.google.com[108.177.14.26]:25: TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits) key-exchange X25519 server-signature RSA-PSS (2048 bits) server-digest SHA256",
 					"Jul 24 03:28:15 mail postfix/smtp[24052]: Verified TLS connection established to mx2.comcast.net[2001:558:fe21:2a::6]:25: TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits)",
 				},
-				removedCount:    0,
-				saslFailedCount: 0,
-				outgoingTLS:     2,
+				removedCount:           0,
+				saslFailedCount:        0,
+				outgoingTLS:            2,
 				smtpdMessagesProcessed: 0,
 			},
 			fields: fields{
@@ -191,7 +191,7 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 				smtpMessagesProcessed:  1,
 			},
 			fields: fields{
-				smtpDelays: prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"stage"}),
+				smtpDelays:    prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"stage"}),
 				smtpProcesses: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
 			},
 		},
@@ -204,15 +204,15 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 					"Dec 29 03:03:48 mail postfix/smtp[8492]: 732BB407C3: to=<redacted@domain.com>, relay=mail.domain.com[1.1.1.1]:25, delay=582, delays=563/16/1.7/0.81, dsn=5.0.0, status=bounced (host mail.domain.com[1.1.1.1] said: 554 DT:SPM 163 mx9,O8CowEDJVFKCokVaRhz+AA--.26016S3 1514513028,please see http://mail.domain.com/help/help_spam.htm?ip= (in reply to end of DATA command))",
 					"Dec 29 03:03:48 mail postfix/bounce[9321]: 732BB407C3: sender non-delivery notification: 5DE184083C",
 				},
-				smtpMessagesProcessed:  2,
-				bounceNonDelivery: 1,
+				smtpMessagesProcessed: 2,
+				bounceNonDelivery:     1,
 			},
 			fields: fields{
 				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
-				smtpDelays: prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"stage"}),
-				smtpStatusDeferred: prometheus.NewCounter(prometheus.CounterOpts{}),
-				smtpProcesses: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
-				bounceNonDelivery: prometheus.NewCounter(prometheus.CounterOpts{}),
+				smtpDelays:            prometheus.NewHistogramVec(prometheus.HistogramOpts{}, []string{"stage"}),
+				smtpStatusDeferred:    prometheus.NewCounter(prometheus.CounterOpts{}),
+				smtpProcesses:         prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"status"}),
+				bounceNonDelivery:     prometheus.NewCounter(prometheus.CounterOpts{}),
 			},
 		},
 		{
@@ -228,18 +228,42 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 			},
 		},
 		{
-			name: "Testing levels of unsupported entries",
+			name: "Testing levels of unsupported entries (warning only)",
 			args: args{
 				line: []string{
-					"Feb 14 19:05:25 123-mail postfix/smtpd[1517]: table hash:/etc/postfix/virtual_mailbox_maps(0,lock|fold_fix) has changed -- restarting",
-				    "Mar 16 12:28:02 123-mail postfix/smtpd[16268]: fatal: file /etc/postfix/main.cf: parameter default_privs: unknown user name value: nobody",
 					"Mar 16 23:30:44 123-mail postfix/qmgr[29980]: warning: please avoid flushing the whole queue when you have",
 					"Mar 16 23:30:44 123-mail postfix/qmgr[29980]: warning: lots of deferred mail, that is bad for performance",
 				},
 				unsupportedLogEntries: []string{
-					`label:<name:"level" value:"" > label:<name:"service" value:"smtpd" > counter:<value:1 > `,
-					`label:<name:"level" value:"fatal" > label:<name:"service" value:"smtpd" > counter:<value:1 > `,
-					`label:<name:"level" value:"warning" > label:<name:"service" value:"qmgr" > counter:<value:2 > `,
+					`label:{name:"level"  value:"warning"}  label:{name:"service"  value:"qmgr"}  counter:{value:2}`,
+				},
+			},
+			fields: fields{
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
+			},
+		},
+		{
+			name: "Testing levels of unsupported entries (fatal only)",
+			args: args{
+				line: []string{
+					"Mar 16 12:28:02 123-mail postfix/smtpd[16268]: fatal: file /etc/postfix/main.cf: parameter default_privs: unknown user name value: nobody",
+				},
+				unsupportedLogEntries: []string{
+					`label:{name:"level"  value:"fatal"}  label:{name:"service"  value:"smtpd"}  counter:{value:1}`,
+				},
+			},
+			fields: fields{
+				unsupportedLogEntries: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"service", "level"}),
+			},
+		},
+		{
+			name: "Testing levels of unsupported entries (no severity found)",
+			args: args{
+				line: []string{
+					"Feb 14 19:05:25 123-mail postfix/smtpd[1517]: table hash:/etc/postfix/virtual_mailbox_maps(0,lock|fold_fix) has changed -- restarting",
+				},
+				unsupportedLogEntries: []string{
+					`label:{name:"level"  value:""}  label:{name:"service"  value:"smtpd"}  counter:{value:1}`,
 				},
 			},
 			fields: fields{
