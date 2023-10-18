@@ -45,19 +45,19 @@ type PostfixExporter struct {
 	logUnsupportedLines bool
 
 	// Metrics that should persist after refreshes, based on logs.
-	cleanupProcesses                prometheus.Counter
-	cleanupRejects                  prometheus.Counter
-	cleanupNotAccepted              prometheus.Counter
-	lmtpDelays                      *prometheus.HistogramVec
-	pipeDelays                      *prometheus.HistogramVec
-	qmgrInsertsNrcpt                prometheus.Histogram
-	qmgrInsertsSize                 prometheus.Histogram
-	qmgrRemoves                     prometheus.Counter
-	qmgrExpires                     prometheus.Counter
-	smtpDelays                      *prometheus.HistogramVec
-	smtpTLSConnects                 *prometheus.CounterVec
-	smtpConnectionTimedOut          prometheus.Counter
-	smtpProcesses                    *prometheus.CounterVec
+	cleanupProcesses       prometheus.Counter
+	cleanupRejects         prometheus.Counter
+	cleanupNotAccepted     prometheus.Counter
+	lmtpDelays             *prometheus.HistogramVec
+	pipeDelays             *prometheus.HistogramVec
+	qmgrInsertsNrcpt       prometheus.Histogram
+	qmgrInsertsSize        prometheus.Histogram
+	qmgrRemoves            prometheus.Counter
+	qmgrExpires            prometheus.Counter
+	smtpDelays             *prometheus.HistogramVec
+	smtpTLSConnects        *prometheus.CounterVec
+	smtpConnectionTimedOut prometheus.Counter
+	smtpProcesses          *prometheus.CounterVec
 	// should be the same as smtpProcesses{status=deferred}, kept for compatibility, but this doesn't work !
 	smtpDeferreds                   prometheus.Counter
 	smtpdConnects                   prometheus.Counter
@@ -70,10 +70,10 @@ type PostfixExporter struct {
 	smtpdTLSConnects                *prometheus.CounterVec
 	unsupportedLogEntries           *prometheus.CounterVec
 	// same as smtpProcesses{status=deferred}, kept for compatibility
-	smtpStatusDeferred              prometheus.Counter
-	opendkimSignatureAdded          *prometheus.CounterVec
-	bounceNonDelivery               prometheus.Counter
-	virtualDelivered                prometheus.Counter
+	smtpStatusDeferred     prometheus.Counter
+	opendkimSignatureAdded *prometheus.CounterVec
+	bounceNonDelivery      prometheus.Counter
+	virtualDelivered       prometheus.Counter
 }
 
 // A LogSource is an interface to read log lines.
@@ -292,7 +292,7 @@ func CollectShowqFromSocket(path string, ch chan<- prometheus.Metric) error {
 
 // Patterns for parsing log messages.
 var (
-	logLine                             = regexp.MustCompile(` ?(postfix|opendkim)(/(\w+))?\[\d+\]: ((?:(warning|error|fatal|panic): )?.*)`)
+	logLine                             = regexp.MustCompile(` ?(postfix[^\/]*|opendkim)(\/(\w+))?\[\d+\]: ((?:(warning|error|fatal|panic): )?.*)`)
 	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
 	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
 	qmgrExpiredLine                     = regexp.MustCompile(`:.*, status=(expired|force-expired), returned to sender`)
@@ -322,8 +322,7 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 	process := logMatches[1]
 	level := logMatches[5]
 	remainder := logMatches[4]
-	switch process {
-	case "postfix":
+	if strings.Contains(process, "postfix") {
 		// Group patterns to check by Postfix service.
 		subprocess := logMatches[3]
 		switch subprocess {
@@ -420,13 +419,13 @@ func (e *PostfixExporter) CollectFromLogLine(line string) {
 		default:
 			e.addToUnsupportedLine(line, subprocess, level)
 		}
-	case "opendkim":
+	} else if process == "opendkim" {
 		if opendkimMatches := opendkimSignatureAdded.FindStringSubmatch(remainder); opendkimMatches != nil {
 			e.opendkimSignatureAdded.WithLabelValues(opendkimMatches[1], opendkimMatches[2]).Inc()
 		} else {
 			e.addToUnsupportedLine(line, process, level)
 		}
-	default:
+	} else {
 		// Unknown log entry format.
 		e.addToUnsupportedLine(line, process, level)
 	}
