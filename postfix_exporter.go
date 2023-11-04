@@ -292,7 +292,7 @@ func CollectShowqFromSocket(path string, ch chan<- prometheus.Metric) error {
 
 // Patterns for parsing log messages.
 var (
-	logLine                             = regexp.MustCompile(` ?(postfix|opendkim)(/(\w+))?\[\d+\]: ((?:(warning|error|fatal|panic): )?.*)`)
+	logLine                             = regexp.MustCompile(` ?(postfix|opendkim)(/(\w+)){0,2}\[\d+\]: ((?:(warning|error|fatal|panic): )?.*)`)
 	lmtpPipeSMTPLine                    = regexp.MustCompile(`, relay=(\S+), .*, delays=([0-9\.]+)/([0-9\.]+)/([0-9\.]+)/([0-9\.]+), `)
 	qmgrInsertLine                      = regexp.MustCompile(`:.*, size=(\d+), nrcpt=(\d+) `)
 	qmgrExpiredLine                     = regexp.MustCompile(`:.*, status=(expired|force-expired), returned to sender`)
@@ -311,6 +311,9 @@ var (
 
 // CollectFromLogline collects metrict from a Postfix log line.
 func (e *PostfixExporter) CollectFromLogLine(line string) {
+	if line == "" {
+		return
+	}
 	// Strip off timestamp, hostname, etc.
 	logMatches := logLine.FindStringSubmatch(line)
 
@@ -683,10 +686,10 @@ func (e *PostfixExporter) StartMetricCollection(ctx context.Context) {
 	for {
 		line, err := e.logSrc.Read(ctx)
 		if err != nil {
-			if err != io.EOF {
+			if err != SystemdNoMoreEntries {
 				log.Printf("Couldn't read journal: %v", err)
+				return
 			}
-			return
 		}
 		e.CollectFromLogLine(line)
 		gauge.Set(1)

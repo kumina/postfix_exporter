@@ -133,8 +133,9 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 					"Apr 26 10:55:19 tcc1 postfix/smtpd[21126]: warning: SASL authentication failure: cannot connect to saslauthd server: Permission denied",
 					"Apr 26 10:55:19 tcc1 postfix/smtpd[21126]: warning: SASL authentication failure: Password verification failed",
 					"Apr 26 10:55:19 tcc1 postfix/smtpd[21126]: warning: laptop.local[192.168.1.2]: SASL PLAIN authentication failed: generic failure",
+					"Nov  4 19:30:11 tcc1 postfix/submissions/smtpd[284714]: warning: unknown[1.2.3.4]: SASL LOGIN authentication failed: authentication failure",
 				},
-				saslFailedCount: 1,
+				saslFailedCount: 2,
 				removedCount:    0,
 			},
 			fields: fields{
