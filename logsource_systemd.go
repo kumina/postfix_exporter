@@ -1,9 +1,11 @@
+//go:build !nosystemd && linux
 // +build !nosystemd,linux
 
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -30,9 +32,12 @@ type SystemdJournal interface {
 	AddMatch(match string) error
 	GetEntry() (*sdjournal.JournalEntry, error)
 	Next() (uint64, error)
-	SeekRealtimeUsec(usec uint64) error
+	SeekTail() error
+	PreviousSkip(skip uint64) (uint64, error)
 	Wait(timeout time.Duration) int
 }
+
+var SystemdNoMoreEntries = errors.New("No more journal entries")
 
 // NewSystemdLogSource returns a log source for reading Systemd
 // journal entries. `unit` and `slice` provide filtering if non-empty
@@ -52,12 +57,7 @@ func NewSystemdLogSource(j SystemdJournal, path, unit, slice string) (*SystemdLo
 	}
 
 	// Start at end of journal
-	if err := logSrc.journal.SeekRealtimeUsec(uint64(timeNow().UnixNano() / 1000)); err != nil {
-		logSrc.journal.Close()
-		return nil, err
-	}
-
-	if r := logSrc.journal.Wait(1 * time.Second); r < 0 {
+	if err := logSrc.journal.SeekTail(); err != nil {
 		logSrc.journal.Close()
 		return nil, err
 	}
@@ -74,12 +74,36 @@ func (s *SystemdLogSource) Path() string {
 }
 
 func (s *SystemdLogSource) Read(ctx context.Context) (string, error) {
+	// wait for any changes in any journal file
+	r := s.journal.Wait(10 * time.Second) // max wait 10 seconds
+	if r < 0 {
+		s.journal.Close()
+		return "", fmt.Errorf("sd_journal.wait returned %d", r)
+	}
+	if r == sdjournal.SD_JOURNAL_INVALIDATE {
+		// the first wait call seems to initialize the watch and results always in INVALIDATE
+		// seek again to the end of the journal
+		if err := s.journal.SeekTail(); err != nil {
+			return "", err
+		}
+		// go back to the last entry, so that next() will advance the pointer to the new entry
+		_, err := s.journal.PreviousSkip(1)
+		if err != nil {
+			return "", err
+		}
+	} else if r == sdjournal.SD_JOURNAL_NOP {
+		// wait timed out without any changes in the journal
+		return "", SystemdNoMoreEntries
+	}
+
 	c, err := s.journal.Next()
 	if err != nil {
 		return "", err
 	}
 	if c == 0 {
-		return "", io.EOF
+		// we might get triggered by journal changes, which are unrelated to our matches (unit)
+		// in that case, we are still at the end of the journal, but no new entry has been added for us
+		return "", SystemdNoMoreEntries
 	}
 
 	e, err := s.journal.GetEntry()
@@ -88,14 +112,16 @@ func (s *SystemdLogSource) Read(ctx context.Context) (string, error) {
 	}
 	ts := time.Unix(0, int64(e.RealtimeTimestamp)*int64(time.Microsecond))
 
-	return fmt.Sprintf(
+	entry := fmt.Sprintf(
 		"%s %s %s[%s]: %s",
 		ts.Format(time.Stamp),
 		e.Fields["_HOSTNAME"],
 		e.Fields["SYSLOG_IDENTIFIER"],
 		e.Fields["_PID"],
 		e.Fields["MESSAGE"],
-	), nil
+	)
+	//log.Printf("Found entry: %s\n", entry)
+	return entry, nil
 }
 
 // A systemdLogSourceFactory is a factory that can create
