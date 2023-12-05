@@ -18,7 +18,7 @@ func TestFileLogSource_Path(t *testing.T) {
 	}
 	defer close()
 
-	src, err := NewFileLogSource(path)
+	src, err := NewFileLogSource(path, defaultConfig)
 	if err != nil {
 		t.Fatalf("NewFileLogSource failed: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestFileLogSource_Read(t *testing.T) {
 	}
 	defer close()
 
-	src, err := NewFileLogSource(path)
+	src, err := NewFileLogSource(path, defaultConfig)
 	if err != nil {
 		t.Fatalf("NewFileLogSource failed: %v", err)
 	}
