@@ -1,0 +1,10 @@
+schemaVersion: "2.0.0"
+fileExistenceTests:
+  - name: "postfix_exporter"
+    path: "/postfix_exporter"
+    shouldExist: true
+    permissions: "-rwxr-xr-x"
+metadataTest:
+  entrypoint: ["/postfix_exporter"]
+licenseTests:
+  - files: ["/LICENSE"]

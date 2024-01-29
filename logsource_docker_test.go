@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"io"
-	"io/ioutil"
 	"strings"
 	"testing"
 
@@ -46,7 +45,7 @@ func TestDockerLogSource_Read(t *testing.T) {
 	ctx := context.Background()
 
 	c := &fakeDockerClient{
-		logsReader: ioutil.NopCloser(strings.NewReader("Feb 13 23:31:30 ahost anid[123]: aline\n")),
+		logsReader: io.NopCloser(strings.NewReader("Feb 13 23:31:30 ahost anid[123]: aline\n")),
 	}
 	src, err := NewDockerLogSource(ctx, c, "acontainer")
 	if err != nil {

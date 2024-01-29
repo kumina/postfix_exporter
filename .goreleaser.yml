@@ -1,0 +1,83 @@
+project_name: postfix_exporter
+before:
+  hooks:
+    - go mod download
+builds:
+  - env:
+      - CGO_ENABLED=0
+    flags:
+      - -tags=nosystemd,nodocker
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+dockers:
+  - image_templates:
+    - "ghcr.io/hsn723/{{.ProjectName}}:{{ .Version }}-amd64"
+    use: buildx
+    dockerfile: Dockerfile
+    extra_files:
+      - LICENSE
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+  - image_templates:
+    - "ghcr.io/hsn723/{{.ProjectName}}:{{ .Version }}-arm64"
+    use: buildx
+    goarch: arm64
+    dockerfile: Dockerfile
+    extra_files:
+      - LICENSE
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+docker_manifests:
+  - name_template: "ghcr.io/hsn723/{{.ProjectName}}:latest"
+    image_templates:
+      - "ghcr.io/hsn723/{{.ProjectName}}:{{ .Version }}-amd64"
+      - "ghcr.io/hsn723/{{.ProjectName}}:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/hsn723/{{.ProjectName}}:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/hsn723/{{.ProjectName}}:{{ .Version }}-amd64"
+      - "ghcr.io/hsn723/{{.ProjectName}}:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/hsn723/{{.ProjectName}}:{{ .Major }}.{{ .Minor }}"
+    image_templates:
+      - "ghcr.io/hsn723/{{.ProjectName}}:{{ .Version }}-amd64"
+      - "ghcr.io/hsn723/{{.ProjectName}}:{{ .Version }}-arm64"
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  use: github-native
+source:
+  enabled: true
+sboms:
+  - id: archive
+    artifacts: archive
+  - id: source
+    artifacts: source
+signs:
+  - cmd: cosign
+    certificate: '${artifact}.pem'
+    args:
+      - sign-blob
+      - '--yes'
+      - '--output-certificate=${certificate}'
+      - '--output-signature=${signature}'
+      - '${artifact}'
+    artifacts: all
+    output: true
+docker_signs:
+  - cmd: cosign
+    artifacts: all
+    output: true
+    args:
+      - 'sign'
+      - '--yes'
+      - '${artifact}'

@@ -1,0 +1,18 @@
+pull_request_rules:
+  - name: Automatic merge
+    conditions:
+      - "#approved-reviews-by>=1"
+      - "#review-requested=0"
+      - "#changes-requested-reviews-by=0"
+    actions:
+      merge:
+        method: squash
+  - name: Automatic merge for dependabot
+    conditions:
+      - author~=^dependabot\[bot\]$
+      - title~=^Bump [^\s]+ from ([\d]+)\.([\d]+)\..+ to \1\.
+    actions:
+      review:
+        type: APPROVE
+      merge:
+        method: squash

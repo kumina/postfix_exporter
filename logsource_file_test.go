@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -19,7 +18,7 @@ func TestFileLogSource_Path(t *testing.T) {
 	}
 	defer close()
 
-	src, err := NewFileLogSource(path)
+	src, err := NewFileLogSource(path, defaultConfig)
 	if err != nil {
 		t.Fatalf("NewFileLogSource failed: %v", err)
 	}
@@ -37,7 +36,7 @@ func TestFileLogSource_Read(t *testing.T) {
 	}
 	defer close()
 
-	src, err := NewFileLogSource(path)
+	src, err := NewFileLogSource(path, defaultConfig)
 	if err != nil {
 		t.Fatalf("NewFileLogSource failed: %v", err)
 	}
@@ -51,7 +50,7 @@ func TestFileLogSource_Read(t *testing.T) {
 }
 
 func setupFakeLogFile() (string, func(), error) {
-	f, err := ioutil.TempFile("", "filelogsource")
+	f, err := os.CreateTemp("", "filelogsource")
 	if err != nil {
 		return "", nil, err
 	}
