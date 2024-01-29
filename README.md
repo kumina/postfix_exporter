@@ -17,6 +17,8 @@ These options can be used when starting the `postfix_exporter`
 | `--web.telemetry-path`   | Path under which to expose metrics                   | `/metrics`                        |
 | `--postfix.showq_path`   | Path at which Postfix places its showq socket        | `/var/spool/postfix/public/showq` |
 | `--postfix.logfile_path` | Path where Postfix writes log entries                | `/var/log/mail.log`               |
+| `--postfix.logfile_must_exist` | Fail if the log file doesn't exist.            | `true`                            |
+| `--postfix.logfile_debug` | Enable debug logging for the log file.              | `false`                           |
 | `--log.unsupported`      | Log all unsupported lines                            | `false`                           |
 | `--docker.enable`        | Read from the Docker logs instead of a file          | `false`                           |
 | `--docker.container.id`  | The container to read Docker logs from               | `postfix`                         |
