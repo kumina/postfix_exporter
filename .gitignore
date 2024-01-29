@@ -11,3 +11,4 @@ postfix_exporter
 *.iml
 vendor/
 dist/
+cover.out

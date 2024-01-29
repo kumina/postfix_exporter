@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -237,9 +238,9 @@ func TestPostfixExporter_CollectFromLogline(t *testing.T) {
 					"Mar 16 23:30:44 123-mail postfix/qmgr[29980]: warning: lots of deferred mail, that is bad for performance",
 				},
 				unsupportedLogEntries: []string{
-					`label:<name:"level" value:"" > label:<name:"service" value:"smtpd" > counter:<value:1 > `,
-					`label:<name:"level" value:"fatal" > label:<name:"service" value:"smtpd" > counter:<value:1 > `,
-					`label:<name:"level" value:"warning" > label:<name:"service" value:"qmgr" > counter:<value:2 > `,
+					`label:{name:"level" value:""} label:{name:"service" value:"smtpd"} counter:{value:1}`,
+					`label:{name:"level" value:"fatal"} label:{name:"service" value:"smtpd"} counter:{value:1}`,
+					`label:{name:"level" value:"warning"} label:{name:"service" value:"qmgr"} counter:{value:2}`,
 				},
 			},
 			fields: fields{
@@ -308,7 +309,7 @@ func assertCounterEquals(t *testing.T, counter prometheus.Collector, expected in
 			var count int = 0
 			for metric := range metricsChan {
 				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
+				_ = metric.Write(&metricDto)
 				count += int(*metricDto.Counter.Value)
 			}
 			assert.Equal(t, expected, count, message)
@@ -321,7 +322,7 @@ func assertCounterEquals(t *testing.T, counter prometheus.Collector, expected in
 			var count int = 0
 			for metric := range metricsChan {
 				metricDto := io_prometheus_client.Metric{}
-				metric.Write(&metricDto)
+				_ = metric.Write(&metricDto)
 				count += int(*metricDto.Counter.Value)
 			}
 			assert.Equal(t, expected, count, message)
@@ -340,9 +341,9 @@ func assertVecMetricsEquals(t *testing.T, counter *prometheus.CounterVec, expect
 		var res []string
 		for metric := range metricsChan {
 			metricDto := io_prometheus_client.Metric{}
-			metric.Write(&metricDto)
-			res = append(res, metricDto.String())
+			_ = metric.Write(&metricDto)
+			res = append(res, strings.Replace(metricDto.String(), "  ", " ", -1))
 		}
-		assert.Equal(t, expected, res, message)
+		assert.ElementsMatch(t, expected, res, message)
 	}
 }
