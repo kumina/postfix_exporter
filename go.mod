@@ -9,7 +9,7 @@ require (
 	github.com/nxadm/tail v1.4.8
 	github.com/prometheus/client_golang v1.4.1
 	github.com/prometheus/client_model v0.2.0
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.8.4
 )
 
 require (
@@ -33,5 +33,5 @@ require (
 	golang.org/x/net v0.0.0-20190613194153-d28f0bde5980 // indirect
 	golang.org/x/sys v0.1.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	gopkg.in/yaml.v2 v2.2.5 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
