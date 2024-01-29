@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -51,7 +50,7 @@ func TestFileLogSource_Read(t *testing.T) {
 }
 
 func setupFakeLogFile() (string, func(), error) {
-	f, err := ioutil.TempFile("", "filelogsource")
+	f, err := os.CreateTemp("", "filelogsource")
 	if err != nil {
 		return "", nil, err
 	}
