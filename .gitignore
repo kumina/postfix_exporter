@@ -10,3 +10,4 @@ postfix_exporter
 
 *.iml
 vendor/
+dist/

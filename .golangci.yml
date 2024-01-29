@@ -1,0 +1,20 @@
+linters:
+  enable:
+  - dupl
+  - ginkgolinter
+  - gocheckcompilerdirectives
+  - gocognit
+  - goconst
+  - gocyclo
+  - godot
+  - gofmt
+  - revive
+  - typecheck
+  - unparam
+run:
+  timeout: 5m
+linters-settings:
+  revive:
+    rules:
+      - name: dot-imports
+        disabled: true

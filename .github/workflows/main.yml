@@ -1,0 +1,98 @@
+name: main
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '*'
+env:
+  go-version: stable
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.go-version }}
+      - name: Build
+        run: make build
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.go-version }}
+      - name: Lint
+        run: make lint
+      - name: Lint
+        run: make lint
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.go-version }}
+      - name: Test
+        run: make test
+  check-goreleaser-config:
+    name: Check goreleaser.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.go-version }}
+      - uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: check -f .goreleaser.yml
+  dry-run:
+    name: Dry-run release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: anchore/sbom-action/download-syft@v0.15.5
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.go-version }}
+      - name: Setup latest version tag
+        run: |
+          echo "GORELEASER_CURRENT_TAG=$(git describe --tags --abbrev=0 --match "v*" || echo v0.0.0)" >> $GITHUB_ENV
+      - name: GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: --snapshot --skip=sign,publish --clean
+      - name: Test built containers
+        run: make container-structure-test
+  tag:
+    name: Tag release
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    needs: [build, lint, check-goreleaser-config, test, dry-run]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT }}
+      - name: Tag release
+        run: |
+          TAG="v$(cat VERSION)"
+          git tag ${TAG}
+          git push origin ${TAG} || true
