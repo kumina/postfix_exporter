@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"errors"
 
 	"github.com/alecthomas/kingpin"
 	"github.com/docker/docker/api/types"
@@ -18,7 +19,8 @@ import (
 // journal.
 type DockerLogSource struct {
 	client      DockerClient
-	containerID string
+	sourceType  string
+	sourceID    string
 	reader      *bufio.Reader
 }
 
@@ -27,23 +29,37 @@ type DockerLogSource struct {
 type DockerClient interface {
 	io.Closer
 	ContainerLogs(context.Context, string, types.ContainerLogsOptions) (io.ReadCloser, error)
+	ServiceLogs(context.Context, string, types.ContainerLogsOptions) (io.ReadCloser, error)
 }
 
 // NewDockerLogSource returns a log source for reading Docker logs.
-func NewDockerLogSource(ctx context.Context, c DockerClient, containerID string) (*DockerLogSource, error) {
-	r, err := c.ContainerLogs(ctx, containerID, types.ContainerLogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Follow:     true,
-		Tail:       "0",
-	})
+func NewDockerLogSource(ctx context.Context, c DockerClient, sourceType string, sourceID string) (*DockerLogSource, error) {
+	var r io.ReadCloser
+	var err error
+	if sourceType == "container" {
+		r, err = c.ContainerLogs(ctx, sourceID, types.ContainerLogsOptions{
+			ShowStdout: true,
+			ShowStderr: true,
+			Follow:     true,
+			Tail:       "0",
+		})
+	} else if sourceType == "service" {
+		r, err = c.ServiceLogs(ctx, sourceID, types.ContainerLogsOptions{
+			ShowStdout: true,
+			ShowStderr: true,
+			Follow:     true,
+			Tail:       "0",
+		})
+	} else {
+		r, err = (io.ReadCloser)(nil), errors.New("docker.source.type should be set to either \"container\" or \"service\" when docker is enabled")
+	}
 	if err != nil {
 		return nil, err
 	}
 
 	logSrc := &DockerLogSource{
 		client:      c,
-		containerID: containerID,
+		sourceID:    sourceID,
 		reader:      bufio.NewReader(r),
 	}
 
@@ -55,7 +71,7 @@ func (s *DockerLogSource) Close() error {
 }
 
 func (s *DockerLogSource) Path() string {
-	return "docker:" + s.containerID
+	return "docker:" + s.sourceID
 }
 
 func (s *DockerLogSource) Read(ctx context.Context) (string, error) {
@@ -70,12 +86,14 @@ func (s *DockerLogSource) Read(ctx context.Context) (string, error) {
 // DockerLogSources from command line flags.
 type dockerLogSourceFactory struct {
 	enable      bool
-	containerID string
+	sourceType string
+	sourceID string
 }
 
 func (f *dockerLogSourceFactory) Init(app *kingpin.Application) {
 	app.Flag("docker.enable", "Read from Docker logs. Environment variable DOCKER_HOST can be used to change the address. See https://pkg.go.dev/github.com/docker/docker/client?tab=doc#NewEnvClient for more information.").Default("false").BoolVar(&f.enable)
-	app.Flag("docker.container.id", "ID/name of the Postfix Docker container.").Default("postfix").StringVar(&f.containerID)
+	app.Flag("docker.source.type", "Source type for docker logs, \"conatiner\" or \"service\"").Default("container").StringVar(&f.sourceType)
+	app.Flag("docker.source.id", "ID/name of the Postfix Docker container or service.").Default("postfix").StringVar(&f.sourceID)
 }
 
 func (f *dockerLogSourceFactory) New(ctx context.Context) (LogSourceCloser, error) {
@@ -88,7 +106,7 @@ func (f *dockerLogSourceFactory) New(ctx context.Context) (LogSourceCloser, erro
 	if err != nil {
 		return nil, err
 	}
-	return NewDockerLogSource(ctx, c, f.containerID)
+	return NewDockerLogSource(ctx, c, f.sourceType, f.sourceID)
 }
 
 func init() {
