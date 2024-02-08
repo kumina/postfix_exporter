@@ -16,7 +16,7 @@ import (
 func TestNewDockerLogSource(t *testing.T) {
 	ctx := context.Background()
 	c := &fakeDockerClient{}
-	src, err := NewDockerLogSource(ctx, c, "acontainer")
+	src, err := NewDockerLogSource(ctx, c, "container", "acontainer")
 	if err != nil {
 		t.Fatalf("NewDockerLogSource failed: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestNewDockerLogSource(t *testing.T) {
 func TestDockerLogSource_Path(t *testing.T) {
 	ctx := context.Background()
 	c := &fakeDockerClient{}
-	src, err := NewDockerLogSource(ctx, c, "acontainer")
+	src, err := NewDockerLogSource(ctx, c, "container", "acontainer")
 	if err != nil {
 		t.Fatalf("NewDockerLogSource failed: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestDockerLogSource_Read(t *testing.T) {
 	c := &fakeDockerClient{
 		logsReader: ioutil.NopCloser(strings.NewReader("Feb 13 23:31:30 ahost anid[123]: aline\n")),
 	}
-	src, err := NewDockerLogSource(ctx, c, "acontainer")
+	src, err := NewDockerLogSource(ctx, c, "container", "acontainer")
 	if err != nil {
 		t.Fatalf("NewDockerLogSource failed: %v", err)
 	}
@@ -70,6 +70,11 @@ type fakeDockerClient struct {
 
 func (c *fakeDockerClient) ContainerLogs(ctx context.Context, containerID string, opts types.ContainerLogsOptions) (io.ReadCloser, error) {
 	c.containerLogsCalls = append(c.containerLogsCalls, containerID)
+	return c.logsReader, nil
+}
+
+func (c *fakeDockerClient) ServiceLogs(ctx context.Context, serviceID string, opts types.ContainerLogsOptions) (io.ReadCloser, error) {
+	c.containerLogsCalls = append(c.containerLogsCalls, serviceID)
 	return c.logsReader, nil
 }
 

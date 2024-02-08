@@ -11,26 +11,37 @@ the systemd journal, the Docker logs, or from a log file.
 
 These options can be used when starting the `postfix_exporter`
 
-| Flag                     | Description                                          | Default                           |
-|--------------------------|------------------------------------------------------|-----------------------------------|
-| `--web.listen-address`   | Address to listen on for web interface and telemetry | `9154`                            |
-| `--web.telemetry-path`   | Path under which to expose metrics                   | `/metrics`                        |
-| `--postfix.showq_path`   | Path at which Postfix places its showq socket        | `/var/spool/postfix/public/showq` |
-| `--postfix.logfile_path` | Path where Postfix writes log entries                | `/var/log/mail.log`               |
-| `--log.unsupported`      | Log all unsupported lines                            | `false`                           |
-| `--docker.enable`        | Read from the Docker logs instead of a file          | `false`                           |
-| `--docker.container.id`  | The container to read Docker logs from               | `postfix`                         |
-| `--systemd.enable`       | Read from the systemd journal instead of file        | `false`                           |
-| `--systemd.unit`         | Name of the Postfix systemd unit                     | `postfix.service`                 |
-| `--systemd.slice`        | Name of the Postfix systemd slice.                   | `""`                              |
-| `--systemd.journal_path` | Path to the systemd journal                          | `""`                              |
+| Flag                     | Description                                                     | Default                           |
+|--------------------------|-----------------------------------------------------------------|-----------------------------------|
+| `--web.listen-address`   | Address to listen on for web interface and telemetry            | `9154`                            |
+| `--web.telemetry-path`   | Path under which to expose metrics                              | `/metrics`                        |
+| `--postfix.showq_path`   | Path at which Postfix places its showq socket                   | `/var/spool/postfix/public/showq` |
+| `--postfix.logfile_path` | Path where Postfix writes log entries                           | `/var/log/mail.log`               |
+| `--log.unsupported`      | Log all unsupported lines                                       | `false`                           |
+| `--docker.enable`        | Read from the Docker logs instead of a file                     | `false`                           |
+| `--docker.source.type`   | Docker source type to read log from `container` or `service`    | `container`                       |
+| `--docker.source.id`     | ID or name of the container or service to read Docker logs from | `postfix`                         |
+| `--systemd.enable`       | Read from the systemd journal instead of file                   | `false`                           |
+| `--systemd.unit`         | Name of the Postfix systemd unit                                | `postfix.service`                 |
+| `--systemd.slice`        | Name of the Postfix systemd slice.                              | `""`                              |
+| `--systemd.journal_path` | Path to the systemd journal                                     | `""`                              |
 
 ## Events from Docker
 
 Postfix servers running in a [Docker](https://www.docker.com/)
-container can be monitored using the `--docker.enable` flag. The
-default container ID is `postfix`, but can be customized with the
-`--docker.container.id` flag.
+container or service can be monitored using the `--docker.enable` flag. The type of source can be
+set with the `--docker.source.type` flag where `container` is default. The
+default source ID is `postfix`, but can be customized with the
+`--docker.source.id` flag set to the desired ID or name of the postfix container or service.
+
+Example:
+```
+postfix_exporter --docker.enable --docker.source.type="service" --docker.source.id="stack-name_postfix"
+```
+or as docker entrypoint:
+```
+["/bin/postfix_exporter", "--docker.enable", "--docker.source.type=service", "--docker.source.id=stack-name_postfix"]
+```
 
 The default is to connect to the local Docker, but this can be
 customized using [the `DOCKER_HOST` and
